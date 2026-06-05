@@ -1,0 +1,12 @@
+[features]
+hooks = true
+
+[[hooks.UserPromptSubmit]]
+type = "command"
+command = "node \"F:/pro/codexhono/honoapp/node_modules/tsx/dist/cli.mjs\" \"F:/pro/codexhono/honoapp/src/hookReceive.ts\" hook \"F:/pro/codexhono/.codex\" \"F:/pro/codexhono/honoapp\" \"192.168.110.126\" 3000 user"
+timeout = 10
+
+[[hooks.Stop]]
+type = "command"
+command = "node \"F:/pro/codexhono/honoapp/node_modules/tsx/dist/cli.mjs\" \"F:/pro/codexhono/honoapp/src/hookReceive.ts\" hook \"F:/pro/codexhono/.codex\" \"F:/pro/codexhono/honoapp\" \"192.168.110.126\" 3000 assistant"
+timeout = 10

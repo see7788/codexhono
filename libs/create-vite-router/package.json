@@ -1,0 +1,17 @@
+{
+  "name": "create-vite-router",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./src": "./src/index.ts",
+    "./src/*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.11",
+    "hono": "^4.12.18",
+    "vite": "^8.0.11"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

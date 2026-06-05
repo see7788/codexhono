@@ -1,0 +1,4 @@
+packages:
+  - "honoapp"
+  - "reactapp"
+  - "libs/*"

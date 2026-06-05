@@ -1,0 +1,62 @@
+{
+  "name": "codexhono",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./honoapp/scrpits/vscode.js",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "link": "(npm unlink --global honoapp --no-save || echo skip unlink) && npm --prefix honoapp link && npm rebuild --global honoapp",
+    "dev": "node honoapp/scrpits/bin.js dev",
+    "stop": "node honoapp/scrpits/bin.js stop",
+    "restart": "node honoapp/scrpits/bin.js restart"
+  },
+  "devDependencies": {
+    "immer": "10.2.0",
+    "typescript": "5.9.3",
+    "zustand": "5.0.13"
+  },
+  "pnpm": {
+    "overrides": {
+      "@ant-design/icons": "6.2.2",
+      "@codemirror/lang-markdown": "6.5.0",
+      "@codemirror/language": "6.12.3",
+      "@codemirror/legacy-modes": "6.5.3",
+      "@hono/node-server": "1.19.11",
+      "@hono/node-ws": "1.3.1",
+      "@hono/zod-validator": "0.8.0",
+      "@modelcontextprotocol/sdk": "0.6.0",
+      "@monaco-editor/react": "4.7.0",
+      "@types/mailparser": "3.4.6",
+      "@types/node": "20.19.40",
+      "@types/react": "19.2.14",
+      "@types/react-dom": "19.2.3",
+      "@uiw/react-codemirror": "4.25.9",
+      "@vitejs/plugin-react": "6.0.1",
+      "@xyflow/react": "12.10.2",
+      "antd": "6.3.7",
+      "hono": "4.12.18",
+      "imapflow": "1.3.3",
+      "immer": "10.2.0",
+      "mailparser": "3.9.8",
+      "monaco-editor": "0.55.1",
+      "openai": "6.37.0",
+      "react": "19.2.6",
+      "react-dom": "19.2.6",
+      "react-router-dom": "7.15.1",
+      "react-use": "17.6.0",
+      "ts-morph": "28.0.0",
+      "tsx": "4.21.0",
+      "typescript": "5.9.3",
+      "vite": "8.0.11",
+      "zod": "4.4.3",
+      "zustand": "5.0.13"
+    }
+  }
+}

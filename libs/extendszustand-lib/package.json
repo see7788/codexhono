@@ -1,0 +1,21 @@
+{
+  "name": "extendszustand-lib",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./src": "./src/index.ts",
+    "./src/*": "./src/*.ts"
+  },
+  "scripts": {},
+  "peerDependencies": {
+    "immer": "10.2.0",
+    "zustand": "5.0.13"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.40",
+    "immer": "10.2.0",
+    "typescript": "5.9.3",
+    "zustand": "5.0.13"
+  }
+}
