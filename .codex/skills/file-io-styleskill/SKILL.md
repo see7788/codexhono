@@ -1,5 +1,5 @@
 ---
-name: "file-io-style"
+name: "file-io-styleskill"
 description: "读写仓库文件时使用。统一处理中文读取、apply_patch 写入、UTF-8 无 BOM、乱码判断和写后复查。"
 ---
 

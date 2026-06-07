@@ -22,6 +22,7 @@ type FlowNode = Node<{
 
 export default function ContextNode({ data, id }: NodeProps<FlowNode>) {
   const sse = appStore(state => state.sse);
+  const sseActions = appStore(state => state.sseActions);
   const target = sse.targetId === id;
   const updateNodeInternals = useUpdateNodeInternals();
 
@@ -34,7 +35,7 @@ export default function ContextNode({ data, id }: NodeProps<FlowNode>) {
       className="context-node"
       onDoubleClickCapture={(event) => {
         event.stopPropagation();
-        sse.drawerNodeToggle(id);
+        sseActions.drawerNodeToggle(id);
       }}
     >
       {target ? <TargetNodeToolbar /> : null}
@@ -61,6 +62,7 @@ export default function ContextNode({ data, id }: NodeProps<FlowNode>) {
 
 function TargetNodeToolbar() {
   const sse = appStore(state => state.sse);
+  const sseActions = appStore(state => state.sseActions);
   const [targetTip, setTargetTip] = useState<"del">();
 
   return (
@@ -70,7 +72,7 @@ function TargetNodeToolbar() {
           size="small"
           onClick={(event) => {
             event.stopPropagation();
-            void sse.nodeLlmOpenai();
+            void sseActions.nodeLlmOpenai();
           }}
           onPointerDown={event => event.stopPropagation()}
         >
@@ -80,7 +82,7 @@ function TargetNodeToolbar() {
           size="small"
           onClick={(event) => {
             event.stopPropagation();
-            void sse.nodeAgentDraw();
+            void sseActions.nodeAgentDraw();
           }}
           onPointerDown={event => event.stopPropagation()}
         >
@@ -90,7 +92,7 @@ function TargetNodeToolbar() {
           size="small"
           onClick={(event) => {
             event.stopPropagation();
-            void sse.nodeAgentCodexcli();
+            void sseActions.nodeAgentCodexcli();
           }}
           onPointerDown={event => event.stopPropagation()}
         >
@@ -100,7 +102,7 @@ function TargetNodeToolbar() {
           size="small"
           onClick={(event) => {
             event.stopPropagation();
-            sse.nodeAdd();
+            sseActions.nodeAdd();
           }}
           onPointerDown={event => event.stopPropagation()}
         >
@@ -110,7 +112,7 @@ function TargetNodeToolbar() {
           size="small"
           onClick={(event) => {
             event.stopPropagation();
-            sse.drawerNodeToggle(sse.targetId);
+            sseActions.drawerNodeToggle(sse.targetId);
           }}
           onPointerDown={event => event.stopPropagation()}
         >
@@ -124,7 +126,7 @@ function TargetNodeToolbar() {
                 size="small"
                 title="current node"
                 onClick={() => {
-                  sse.nodeDelete();
+                  sseActions.nodeDelete();
                   setTargetTip(undefined);
                 }}
               >
@@ -135,7 +137,7 @@ function TargetNodeToolbar() {
                 size="small"
                 title="current node and child nodes"
                 onClick={() => {
-                  sse.nodeBranchDelete();
+                  sseActions.nodeBranchDelete();
                   setTargetTip(undefined);
                 }}
               >

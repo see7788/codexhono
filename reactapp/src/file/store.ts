@@ -10,10 +10,13 @@ type FileTreeNode = FileTree[number] & {
   children?: FileTree;
 };
 
-type Store = {
+type FileState = {
   loadedKeys: Key[];
   opened: boolean;
   tree: FileTreeNode[];
+};
+
+type FileActions = {
   loadedKeysChange: (keys: Key[]) => void;
   nodeLoad: (node: FileTreeNode) => Promise<void>;
   treeOpen: () => Promise<void>;
@@ -38,11 +41,13 @@ const entriesLoad = async (path?: string) => {
   return response.ok ? response.json() : [];
 };
 
-const createStore = immerStateCreator<{ file: Store }>((set) => {
-  const store: Store = {
+const createStore = immerStateCreator<{ file: FileState; fileActions: FileActions }>((set) => {
+  const file: FileState = {
     loadedKeys: [],
     opened: false,
     tree: [],
+  };
+  const fileActions: FileActions = {
     loadedKeysChange: (keys) => set((state) => {
       state.file.loadedKeys = keys;
     }),
@@ -63,7 +68,7 @@ const createStore = immerStateCreator<{ file: Store }>((set) => {
       });
     },
   };
-  return { file: store };
+  return { file, fileActions };
 });
 
 export default createStore;

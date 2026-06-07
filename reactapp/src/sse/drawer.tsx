@@ -15,6 +15,7 @@ const chatOptions: { label: string; value: ChatTarget }[] = [
 
 export default function ActionDrawer() {
   const sse = appStore(state => state.sse);
+  const sseActions = appStore(state => state.sseActions);
   const navigate = useNavigate();
   const splitRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef(false);
@@ -30,35 +31,35 @@ export default function ActionDrawer() {
 
   function targetNodeSet() {
     if (!nodeId) return;
-    sse.nodeSelect(nodeId);
+    sseActions.nodeSelect(nodeId);
   }
 
   function nodeAdd() {
     targetNodeSet();
-    sse.nodeAdd();
+    sseActions.nodeAdd();
   }
 
   function nodeTextSet() {
     if (!nodeId) return;
-    sse.nodeTextChange(sse.drawerText, nodeId);
+    sseActions.nodeTextChange(sse.drawerText, nodeId);
   }
 
   function nodeTextChat() {
     if (!nodeId) return;
     targetNodeSet();
-    sse.nodeTextChange(sse.drawerText, nodeId);
-    void sse.nodeChat([contextText, sse.drawerText].filter(Boolean).join("\n\n"));
+    sseActions.nodeTextChange(sse.drawerText, nodeId);
+    void sseActions.nodeChat([contextText, sse.drawerText].filter(Boolean).join("\n\n"));
   }
 
   function nodeDelCurrent() {
     if (!nodeId) return;
-    sse.nodeDelete(nodeId);
+    sseActions.nodeDelete(nodeId);
     setTargetTip(undefined);
   }
 
   function nodeDelBranch() {
     if (!nodeId) return;
-    sse.nodeBranchDelete(nodeId);
+    sseActions.nodeBranchDelete(nodeId);
     setTargetTip(undefined);
   }
 
@@ -76,8 +77,8 @@ export default function ActionDrawer() {
       destroyOnHidden
       getContainer={false}
       mask={false}
-      onClose={sse.drawerClose}
-      onResizeSizeChange={sse.drawerSizeChange}
+      onClose={sseActions.drawerClose}
+      onResizeSizeChange={sseActions.drawerSizeChange}
       open={open}
       placement="right"
       push={false}
@@ -106,7 +107,7 @@ export default function ActionDrawer() {
             size="small"
             style={{ width: 150 }}
             value={sse.drawerChatTarget}
-            onChange={sse.drawerChatTargetChange}
+            onChange={sseActions.drawerChatTargetChange}
           />
           <Button size="small" onClick={chatRouteOpen}>设置</Button>
           <Button size="small" onClick={chatRouteOpen}>chat</Button>
@@ -206,7 +207,7 @@ export default function ActionDrawer() {
             resize: "none",
           }}
           value={sse.drawerText}
-          onChange={event => sse.drawerTextChange(event.target.value)}
+          onChange={event => sseActions.drawerTextChange(event.target.value)}
         />
       </div>
     </Drawer>

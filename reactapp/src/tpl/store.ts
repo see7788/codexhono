@@ -11,12 +11,15 @@ type SourceLoadResult = {
 };
 type SourceSaveStatus = "idle" | "pending" | "saving" | "saved" | "failed";
 
-type Store = {
+type TplState = {
   existingTargets: string[];
   loading: boolean;
   source: string;
   sourceSaveStatus: SourceSaveStatus;
   sourceSaveTick: number;
+};
+
+type TplActions = {
   sourceChange: (source: string) => void;
   sourceLoad: () => Promise<void>;
   sourceSave: (source: string) => Promise<void>;
@@ -34,19 +37,21 @@ const sourceTextGet = (data: SourceLoadResult) => [
   `const tpl: Tpl = ${data.source};`,
 ].join("\n");
 
-const createStore = immerStateCreator<{ tpl: Store }>((set) => {
+const createStore = immerStateCreator<{ tpl: TplState; tplActions: TplActions }>((set) => {
   const existingTargetDelete = (target: string) => set((state) => {
     state.tpl.existingTargets = state.tpl.existingTargets.filter(item => item !== target);
   });
   const existingTargetPut = (target: string) => set((state) => {
     if (!state.tpl.existingTargets.includes(target)) state.tpl.existingTargets.push(target);
   });
-  const store: Store = {
+  const tpl: TplState = {
     existingTargets: [],
     loading: false,
     source: "",
     sourceSaveStatus: "idle",
     sourceSaveTick: 0,
+  };
+  const tplActions: TplActions = {
     sourceChange: (source) => set((state) => {
       state.tpl.source = source;
     }),
@@ -115,7 +120,7 @@ const createStore = immerStateCreator<{ tpl: Store }>((set) => {
       }
     },
   };
-  return { tpl: store };
+  return { tpl, tplActions };
 });
 
 export default createStore;

@@ -40,7 +40,7 @@ const store = create<AppStore>()(persist(immer((set, get, api) => {
     };
   },
   onRehydrateStorage: () => (state) => {
-    state?.sse.viewReset();
+    state?.sseActions.viewReset();
   },
 }));
 

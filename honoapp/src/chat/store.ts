@@ -71,7 +71,7 @@ export type Store = {
 const createStore = immerStateCreator<Store>((set, get) => {
   const llmopenaiConfig = () => {
     const entry = Object.entries(get().chat.llm)
-      .find(([, config]) => config.protocols.includes("openai"));
+      .find(([, config]) => config.protocols.includes("openai") && config.apikeys[0] && config.models[0]);
     if (!entry) throw new Error("openai llm is not configured");
     const [url, config] = entry;
     const apiKey = config.apikeys[0];
@@ -128,7 +128,7 @@ const createStore = immerStateCreator<Store>((set, get) => {
   }
   const llmanthropicConfig = () => {
     const entry = Object.entries(get().chat.llm)
-      .find(([, config]) => config.protocols.includes("anthropic"));
+      .find(([, config]) => config.protocols.includes("anthropic") && config.apikeys[0] && config.models[0]);
     if (!entry) throw new Error("anthropic llm is not configured");
     const [url, config] = entry;
     const apiKey = config.apikeys[0];

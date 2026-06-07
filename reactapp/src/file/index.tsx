@@ -77,6 +77,7 @@ function FileTree({ loadedKeys, loadedKeysChange, loadNode, selectFile, tree }: 
 export default function FilePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const file = appStore(state => state.file);
+  const fileActions = appStore(state => state.fileActions);
   const filepath = searchParams.get("file") ?? "";
 
   const reselectFile = useCallback(async () => {
@@ -85,8 +86,8 @@ export default function FilePage() {
       currentParams.delete("filenode");
       return currentParams;
     });
-    await file.treeOpen();
-  }, [file, setSearchParams]);
+    await fileActions.treeOpen();
+  }, [fileActions, setSearchParams]);
 
   const selectFile = useCallback((path: string) => {
     setSearchParams(currentParams => {
@@ -112,13 +113,13 @@ export default function FilePage() {
       {file.opened ? (
         <FileTree
           loadedKeys={file.loadedKeys}
-          loadedKeysChange={file.loadedKeysChange}
-          loadNode={file.nodeLoad}
+          loadedKeysChange={fileActions.loadedKeysChange}
+          loadNode={fileActions.nodeLoad}
           selectFile={selectFile}
           tree={file.tree}
         />
       ) : (
-        <FileOpenButton onOpen={() => void file.treeOpen()} />
+        <FileOpenButton onOpen={() => void fileActions.treeOpen()} />
       )}
     </div>
   );

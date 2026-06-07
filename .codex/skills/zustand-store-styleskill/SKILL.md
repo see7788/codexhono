@@ -1,5 +1,5 @@
 ---
-name: "zustand-store-style"
+name: "zustand-store-styleskill"
 description: "涉及 zustand 主仓库、切片仓库工厂、store action、业务状态流转、流式状态或订阅推送时使用。"
 ---
 
@@ -65,7 +65,7 @@ description: "涉及 zustand 主仓库、切片仓库工厂、store action、业
 - 同一类业务状态只能有一个写入口；多个来源影响同一状态时，先归一成事件，再在仓库 action 内处理。
 - 外部事件源、流式响应、订阅推送和后台进度统一进入仓库事件入口，并按事件增量更新状态。
 - 仓库里优先围绕状态变量组织动作：状态变量保持清晰，动作只表达状态如何变化。
-- 仓库 action、状态和路由层级命名使用 variable-style。
+- 仓库 action、状态和路由层级命名使用 variable-styleskill。
 
 ## 放置边界
 

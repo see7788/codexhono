@@ -77,11 +77,11 @@ const nodes = {
   HOSTNAME: "HONOCODEX_HOSTNAME",
   PORT: "HONOCODEX_PORT",
   ORIGIN: "HONOCODEX_ORIGIN",
-  fileIo: "file-io-style",
-  netStyle: "net-style",
-  scopeStyle: "scope-style",
-  variableStyle: "variable-style",
-  zustandStoreStyle: "zustand-store-style",
+  fileIo: "file-io-styleskill",
+  netStyle: "net-styleskill",
+  scopeStyle: "scope-styleskill",
+  variableStyle: "variable-styleskill",
+  zustandStoreStyle: "zustand-store-styleskill",
 } as const
 const tpl: Tpl = {
   nodes,

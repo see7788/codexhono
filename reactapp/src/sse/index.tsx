@@ -15,6 +15,7 @@ const routeLabels = {
 
 export default function Page() {
   const sse = appStore(state => state.sse);
+  const sseActions = appStore(state => state.sseActions);
   const location = useLocation();
   const navigate = useNavigate();
   const routeName = routeNameGet(location.pathname);
@@ -23,7 +24,7 @@ export default function Page() {
     const events = new EventSource(`${window.location.origin}/codex/sse`);
     events.addEventListener("message", (event) => {
       const message = JSON.parse(event.data) as { text: string; stop?: boolean };
-      appStore.getState().sse.hookMessageReceive(message);
+      appStore.getState().sseActions.hookMessageReceive(message);
     });
     events.addEventListener("error", () => {
       events.close();
@@ -44,7 +45,7 @@ export default function Page() {
       drawerOpen={!!sse.drawerNodeId && !!sse.nodesState[sse.drawerNodeId]}
       hookActive={sse.hookPushReceive}
       routeLabel={routeLabels[routeName]}
-      onHookToggle={sse.hookPushReceiveToggle}
+      onHookToggle={sseActions.hookPushReceiveToggle}
       onRouteNext={routeNext}
     >
       <Routes>

@@ -50,6 +50,7 @@ const nodeTypes = {
 
 export default function FlowView() {
   const sse = appStore(state => state.sse);
+  const sseActions = appStore(state => state.sseActions);
   const [baseColor, highlightColor] = sse.mainColor;
   const path = pathGet(sse);
   const nodes = nodesGet(sse, path.pathNodeIds);
@@ -81,22 +82,22 @@ export default function FlowView() {
         deleteKeyCode={["Backspace", "Delete"]}
         edges={edges}
         edgesReconnectable
-        isValidConnection={sse.connectionValid}
+        isValidConnection={sseActions.connectionValid}
         minZoom={0.05}
         nodes={nodes}
         nodesConnectable
         nodesDraggable={false}
         nodeTypes={nodeTypes}
-        onConnect={sse.nodeConnect}
-        onConnectEnd={sse.connectionEnd}
-        onConnectStart={(_, params) => sse.connectionStartBegin(params)}
-        onEdgesChange={sse.edgeSelectionChange}
-        onEdgesDelete={sse.edgesDelete}
-        onNodeClick={(_, node) => sse.nodeSelect(node)}
+        onConnect={sseActions.nodeConnect}
+        onConnectEnd={sseActions.connectionEnd}
+        onConnectStart={(_, params) => sseActions.connectionStartBegin(params)}
+        onEdgesChange={sseActions.edgeSelectionChange}
+        onEdgesDelete={sseActions.edgesDelete}
+        onNodeClick={(_, node) => sseActions.nodeSelect(node)}
         onNodeDoubleClick={(_, node) => {
-          sse.drawerNodeToggle(node.id);
+          sseActions.drawerNodeToggle(node.id);
         }}
-        onReconnect={sse.edgeReconnect}
+        onReconnect={sseActions.edgeReconnect}
         proOptions={{ hideAttribution: true }}
         reconnectRadius={18}
         zoomOnDoubleClick={false}

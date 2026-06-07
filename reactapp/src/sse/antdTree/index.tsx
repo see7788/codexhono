@@ -4,6 +4,7 @@ import appStore from "../../store";
 
 export default function TreeView() {
   const sse = appStore(state => state.sse);
+  const sseActions = appStore(state => state.sseActions);
   const treeData = treeDataGet(sse);
   const expandedKeys = treeExpandedKeysGet(treeData);
 
@@ -12,10 +13,10 @@ export default function TreeView() {
       expandedKeys={expandedKeys}
       selectedKeys={[sse.targetId]}
       treeData={treeData}
-      onDoubleClick={(_, node) => sse.drawerNodeToggle(String(node.key))}
+      onDoubleClick={(_, node) => sseActions.drawerNodeToggle(String(node.key))}
       onSelect={(keys) => {
         const key = keys[0];
-        if (key !== undefined) sse.nodeSelect(String(key));
+        if (key !== undefined) sseActions.nodeSelect(String(key));
       }}
     />
   );

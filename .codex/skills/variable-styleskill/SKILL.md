@@ -1,5 +1,5 @@
 ---
-name: "variable-style"
+name: "variable-styleskill"
 description: "涉及变量、形参、对象方法、store action、路由层级或文件内命名时使用。约束语义命名、状态名在前、避免动词前置和无意义形参。"
 ---
 

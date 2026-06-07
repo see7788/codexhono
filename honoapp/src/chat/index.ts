@@ -57,9 +57,9 @@ const agentDrawEventSchema = z.discriminatedUnion("type", [
     type: z.literal("done"),
   }).strict(),
 ]);
-let llmopenai = store.getState().chatActions.llm.openai.chat();
-let llmanthropic = store.getState().chatActions.llm.anthropic.chat();
-let codexcli = store.getState().chatActions.agent.codexcli.chat();
+const llmopenai = (prompt: string) => store.getState().chatActions.llm.openai.chat()(prompt);
+const llmanthropic = (prompt: string) => store.getState().chatActions.llm.anthropic.chat()(prompt);
+const codexcli = (prompt: string) => store.getState().chatActions.agent.codexcli.chat()(prompt);
 const stateSchema = store.getState().chatActions.state.schema;
 export default new Hono().basePath("/chat")
   .get("/state", (ctx) => {
@@ -70,9 +70,6 @@ export default new Hono().basePath("/chat")
     store.setState(state => {
       state.chat = chat;
     });
-    llmopenai = store.getState().chatActions.llm.openai.chat()
-    llmanthropic = store.getState().chatActions.llm.anthropic.chat()
-    codexcli = store.getState().chatActions.agent.codexcli.chat()
     return ctx.body(null, 200);
   })
   .get("/llm/openai", (ctx) => {

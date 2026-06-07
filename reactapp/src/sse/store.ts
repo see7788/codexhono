@@ -38,7 +38,7 @@ type DrawEvent =
   | { message: string; type: "error" }
   | { type: "done" };
 
-type Store = {
+type SseState = {
   connectionStart?: ConnectionStart;
   drawerChatTarget: DrawerChatTarget;
   drawerNodeId?: string;
@@ -53,6 +53,9 @@ type Store = {
   selectedEdgeIds: Record<string, true>;
   streamingNodeIds: Record<string, true>;
   targetId: string;
+};
+
+type SseActions = {
   connectionEnd: () => void;
   connectionStartBegin: (p: Start) => void;
   connectionValid: IsValidConnection;
@@ -258,7 +261,7 @@ function outputTextClean(value: string) {
   return repaired.includes("\uFFFD") ? text : repaired;
 }
 
-const createStore = immerStateCreator<{ sse: Store }>((set, get) => {
+const createStore = immerStateCreator<{ sse: SseState; sseActions: SseActions }>((set, get) => {
   const client = hc<typeof chatRouter>(location.origin);
   const initialNodes: NodesState = {
     "1": {
@@ -388,7 +391,7 @@ const createStore = immerStateCreator<{ sse: Store }>((set, get) => {
     request: (prompt: string) => Promise<Response>,
     errorPrefix: string,
   ) => {
-    if (nodeData !== undefined) get().sse.nodeTextChange(nodeData);
+    if (nodeData !== undefined) get().sseActions.nodeTextChange(nodeData);
     const sse = get().sse;
     const input: string[] = [];
     for (let id: string | undefined = sse.nodesState[sse.targetId] ? sse.targetId : undefined; id !== undefined;) {
@@ -407,7 +410,7 @@ const createStore = immerStateCreator<{ sse: Store }>((set, get) => {
   const agentDrawSubmit = async (prompt: string) => {
     if (!prompt.trim()) return;
     const graphOperationApply = (
-      draft: { sse: Store },
+      draft: { sse: SseState },
       operation: GraphOperation,
     ) => {
       if (operation.type === "node.text" || operation.type === "node.replace") {
@@ -499,11 +502,13 @@ const createStore = immerStateCreator<{ sse: Store }>((set, get) => {
       buffer += decoder.decode();
       drawEventLineReceive(buffer);
     } catch (error) {
-      get().sse.nodeAdd(error instanceof Error ? error.message : String(error));
+      get().sseActions.nodeAdd(error instanceof Error ? error.message : String(error));
     }
   };
-  const store: Store = {
+  const sse: SseState = {
     ...initialStore,
+  };
+  const sseActions: SseActions = {
     drawerClose: () => {
       set((draft) => {
         draft.sse.drawerNodeId = undefined;
@@ -731,7 +736,7 @@ const createStore = immerStateCreator<{ sse: Store }>((set, get) => {
       });
     },
     nodeAgentDraw: async (nodeData) => {
-      if (nodeData !== undefined) get().sse.nodeTextChange(nodeData);
+      if (nodeData !== undefined) get().sseActions.nodeTextChange(nodeData);
       const sse = get().sse;
       const targetNode = sse.nodesState[sse.targetId];
       const userPrompt = [
@@ -877,7 +882,7 @@ const createStore = immerStateCreator<{ sse: Store }>((set, get) => {
       });
     },
   };
-  return { sse: store };
+  return { sse, sseActions };
 });
 
 export default createStore;

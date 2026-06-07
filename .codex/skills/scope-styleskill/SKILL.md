@@ -1,5 +1,5 @@
 ---
-name: "scope-style"
+name: "scope-styleskill"
 description: "涉及前端组件作用域、后端业务对象边界、复用归一化、拆分、导出和样式放置时使用。约束最小作用域、真实复用后抽象和前后端边界。"
 ---
 
@@ -28,12 +28,12 @@ description: "涉及前端组件作用域、后端业务对象边界、复用归
 - 路由入口只组合子路由、布局和共享挂载；视图逻辑进入对应路由目录，业务流转进入 zustand-store-style「前端仓库」。
 - 组件内只是简单派生数据或简单事件方法时，直接内联实现。
 - 组件内出现复用逻辑、局部流程或多个相关临时状态时，抽成组件附近的 useHook。
-- 复杂业务数据、长流程异步、订阅推送、流式返回和多 action 协作进入 zustand-store-style「前端仓库」。
+- 复杂业务数据、长流程异步、订阅推送、流式返回和多 action 协作进入 zustand-store-styleskill「前端仓库」。
 - 组件私有状态只保存纯 UI 临时态，例如弹窗开关、输入框草稿、hover、focus。
 - 组件拆分后保持默认导出风格；禁止为了私有组件使用 `export function Xxx` 或 `export const Xxx`。
 - 禁止为单调用点组件制造 props 透传；组件需要的数据优先在自身最小作用域读取仓库、hook 或上下文。
 - 单组件私有动作不要为了拆组件变成 props 传递；动作依赖的 hook/ref 应留在消费组件内，或移动到真正消费该动作的组件内。
-- 跨组件共享的按钮文案、接口标签、状态提示等显示名称必须在最小共同作用域归一；视图私有文案放视图目录或消费点，业务状态、请求和流式提示文案按 zustand-store-style 放进切片仓库或业务对象。
+- 跨组件共享的按钮文案、接口标签、状态提示等显示名称必须在最小共同作用域归一；视图私有文案放视图目录或消费点，业务状态、请求和流式提示文案按 zustand-store-styleskill 放进切片仓库或业务对象。
 - React 中优先依赖组件 props、useMemo、useCallback、useAsyncFn、zustand store 等实际调用点推导类型。
 - 抽屉类交互优先使用项目统一的可调整尺寸 Drawer 组件；不要在页面里混用 antd 原生 Drawer 和本地临时实现。
 
@@ -58,7 +58,7 @@ description: "涉及前端组件作用域、后端业务对象边界、复用归
 - 是否有记忆由对象边界决定：client 可复用，thread、session、conversation 不复用则无记忆，复用则有记忆。
 - 不要把依赖 `this` 的实例方法裸返回；必须用闭包保持调用对象，例如 `prompt => thread.runStreamed(prompt)`。
 - 纯数据转换、无状态工具和单点逻辑不要为了面向对象强行造类；只有需要维护状态、不变量或多处行为协作时才使用对象。
-- 对象方法命名使用 variable-style。
+- 对象方法命名使用 variable-styleskill。
 
 ## 导出边界
 

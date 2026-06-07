@@ -17,6 +17,7 @@ const toolButtonsLeft = toolLeft + toolSize;
 
 export default function Tools() {
   const sse = appStore(state => state.sse);
+  const sseActions = appStore(state => state.sseActions);
   const flow = useReactFlow();
   const controlButtonStyle: CSSProperties = {
     alignItems: "center",
@@ -65,7 +66,7 @@ export default function Tools() {
         </ControlButton>
         <ControlButton
           className={sse.layoutDirection === "horizontal" ? "context-control-button-active" : undefined}
-          onClick={() => sse.layoutDirectionChange("horizontal")}
+          onClick={() => sseActions.layoutDirectionChange("horizontal")}
           style={controlButtonStyle}
           title="从左到右"
         >
@@ -73,7 +74,7 @@ export default function Tools() {
         </ControlButton>
         <ControlButton
           className={sse.layoutDirection === "vertical" ? "context-control-button-active" : undefined}
-          onClick={() => sse.layoutDirectionChange("vertical")}
+          onClick={() => sseActions.layoutDirectionChange("vertical")}
           style={controlButtonStyle}
           title="从上到下"
         >
