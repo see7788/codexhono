@@ -47,6 +47,14 @@ const renderSection = (item: Tpl["agentsMd"]["sections"][number]) => [
   ...(item.code ? ["", `\`\`\`${item.code.language}`, item.code.content, "```"] : []),
 ].filter(value => value !== undefined).join("\n");
 const renderAgentsMd = (tpl: Tpl) => `${tpl.agentsMd.sections.map(renderSection).join("\n\n")}\n`;
+const renderMcpServer = (name: string, server: NonNullable<Tpl["configToml"]["mcpServers"]>[string]) => [
+  `[mcp_servers.${name}]`,
+  `command = ${JSON.stringify(server.command)}`,
+  ...(server.args ? [`args = ${JSON.stringify(server.args)}`] : []),
+  "",
+];
+const renderMcpServers = (tpl: Tpl) =>
+  Object.entries(tpl.configToml.mcpServers ?? {}).flatMap(([name, server]) => renderMcpServer(name, server));
 const renderConfigToml = (tpl: Tpl) => [
   ...(tpl.configToml.developerInstructions ? [
     `developer_instructions = ${JSON.stringify(tpl.configToml.developerInstructions.join("\n"))}`,
@@ -55,6 +63,7 @@ const renderConfigToml = (tpl: Tpl) => [
   "[features]",
   `hooks = ${tpl.configToml.features.hooks}`,
   "",
+  ...renderMcpServers(tpl),
   ...tpl.configToml.hooks.UserPromptSubmit.flatMap(hook => ["[[hooks.UserPromptSubmit]]", `type = ${JSON.stringify(hook.type)}`, `command = ${JSON.stringify(hook.command)}`, `timeout = ${hook.timeout}`, ""]),
   ...tpl.configToml.hooks.Stop.flatMap(hook => ["[[hooks.Stop]]", `type = ${JSON.stringify(hook.type)}`, `command = ${JSON.stringify(hook.command)}`, `timeout = ${hook.timeout}`, ""]),
 ].join("\n");

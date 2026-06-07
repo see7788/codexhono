@@ -5,6 +5,10 @@ const commandHookSchema = z.object({
   command: z.string().min(1),
   timeout: z.number().int().positive(),
 });
+const mcpServerSchema = z.object({
+  args: z.array(z.string()).optional(),
+  command: z.string().min(1),
+}).strict();
 const markdownCodeSchema = z.object({
   language: z.string().min(1),
   content: z.string().min(1),
@@ -47,6 +51,7 @@ export const tplSchema = z.object({
       UserPromptSubmit: z.array(commandHookSchema),
       Stop: z.array(commandHookSchema),
     }),
+    mcpServers: z.record(z.string().min(1), mcpServerSchema).optional(),
   }).superRefine((configToml, ctx) => {
     if (!configToml.features.hooks) {
       return;
@@ -102,13 +107,19 @@ const tpl: Tpl = {
       {
         title: "服务端",
         items: [
-          `后端分流：Hono API、外部 HTTP、SSE、WebSocket 和同进程 Hono 调用使用 ${nodes.netStyle}；服务端 store/action 和业务状态流转使用 ${nodes.zustandStoreStyle}；对象边界、复用、导出和作用域使用 ${nodes.scopeStyle}；变量、路由和方法命名使用 ${nodes.variableStyle}。`,
+          `Hono API、外部 HTTP、SSE、WebSocket 和同进程 Hono 调用使用 ${nodes.netStyle}。`,
+          `服务端 store/action 和业务状态流转使用 ${nodes.zustandStoreStyle}。`,
+          `对象边界、复用、导出和作用域使用 ${nodes.scopeStyle}。`,
+          `变量、路由和方法命名使用 ${nodes.variableStyle}。`,
         ]
       },
       {
         title: "web端",
         items: [
-          `前端分流：组件结构、页面交互、样式和组件拆分使用 ${nodes.scopeStyle}；页面状态、store、action 和流式状态使用 ${nodes.zustandStoreStyle}；页面 API、SSE 和 WebSocket 使用 ${nodes.netStyle}；变量、形参和方法命名使用 ${nodes.variableStyle}。`,
+          `组件结构、页面交互、样式和组件拆分使用 ${nodes.scopeStyle}。`,
+          `页面状态、store、action 和流式状态使用 ${nodes.zustandStoreStyle}。`,
+          `页面 API、SSE 和 WebSocket 使用 ${nodes.netStyle}。`,
+          `变量、形参和方法命名使用 ${nodes.variableStyle}。`,
         ],
         orderedItems: [
           `用 Chrome DevTools MCP 访问${nodes.ORIGIN}（host=${nodes.HOSTNAME}，port=${nodes.PORT}）`,
@@ -136,6 +147,20 @@ const tpl: Tpl = {
           timeout: 10,
         },
       ],
+    },
+    mcpServers: {
+      "chrome-devtools": {
+        args: ["chrome-devtools-mcp@latest"],
+        command: "npx",
+      },
+      codegraph: {
+        args: ["@colbymchenry/codegraph", "serve", "--mcp"],
+        command: "npx",
+      },
+      node_repl: {
+        args: [],
+        command: "node_repl",
+      },
     },
   },
   skills: {

@@ -25,6 +25,9 @@ const codextplRouter = new Hono()
     store.getState().tplActions.agentsMdDelete();
     return ctx.body(null, 200);
   })
+  .get("/configToml", (ctx) => {
+    return ctx.text(store.getState().tplActions.configTomlRead());
+  })
   .put("/configToml", zValidator("json", contentSchema), (ctx) => {
     const content = ctx.req.valid("json");
     store.getState().tplActions.configTomlWrite(content);

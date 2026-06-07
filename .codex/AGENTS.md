@@ -10,11 +10,17 @@
 
 ## 服务端
 
-- 后端分流：Hono API、外部 HTTP、SSE、WebSocket 和同进程 Hono 调用使用 net-styleskill；服务端 store/action 和业务状态流转使用 zustand-store-styleskill；对象边界、复用、导出和作用域使用 scope-styleskill；变量、路由和方法命名使用 variable-styleskill。
+- Hono API、外部 HTTP、SSE、WebSocket 和同进程 Hono 调用使用 net-styleskill。
+- 服务端 store/action 和业务状态流转使用 zustand-store-styleskill。
+- 对象边界、复用、导出和作用域使用 scope-styleskill。
+- 变量、路由和方法命名使用 variable-styleskill。
 
 ## web端
 
-- 前端分流：组件结构、页面交互、样式和组件拆分使用 scope-styleskill；页面状态、store、action 和流式状态使用 zustand-store-styleskill；页面 API、SSE 和 WebSocket 使用 net-styleskill；变量、形参和方法命名使用 variable-styleskill。
+- 组件结构、页面交互、样式和组件拆分使用 scope-styleskill。
+- 页面状态、store、action 和流式状态使用 zustand-store-styleskill。
+- 页面 API、SSE 和 WebSocket 使用 net-styleskill。
+- 变量、形参和方法命名使用 variable-styleskill。
 
 1. 用 Chrome DevTools MCP 访问http://192.168.110.126:3000（host=192.168.110.126，port=3000）
 2. 服务不可达时在pnpm 根目录执行`pnpm restart`,不要在子项目内执行pnpm

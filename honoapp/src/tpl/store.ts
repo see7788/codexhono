@@ -15,6 +15,7 @@ export type Store = {
     agentsMdWrite: (content: string) => void,
     codexTplMaterialize: () => void,
     configTomlDelete: () => void,
+    configTomlRead: () => string,
     configTomlWrite: (content: string) => void,
     skillDelete: (dir: string) => void,
     skillWrite: (dir: string, content: string) => void,
@@ -87,6 +88,14 @@ const createTplStore = immerStateCreator<Store>((set, get) => {
       `timeout = ${hook.timeout}`,
       "",
     ];
+  const configTomlMcpServerRender = (name: string, server: NonNullable<Tpl["configToml"]["mcpServers"]>[string]) => [
+    `[mcp_servers.${name}]`,
+    `command = ${JSON.stringify(server.command)}`,
+    ...(server.args ? [`args = ${JSON.stringify(server.args)}`] : []),
+    "",
+  ];
+  const configTomlMcpServersRender = (tpl: Tpl) =>
+    Object.entries(tpl.configToml.mcpServers ?? {}).flatMap(([name, server]) => configTomlMcpServerRender(name, server));
   const configTomlRender = (tpl: Tpl) => [
     ...(tpl.configToml.developerInstructions ? [
       `developer_instructions = ${JSON.stringify(tpl.configToml.developerInstructions.join("\n"))}`,
@@ -95,6 +104,7 @@ const createTplStore = immerStateCreator<Store>((set, get) => {
     "[features]",
     `hooks = ${tpl.configToml.features.hooks}`,
     "",
+    ...configTomlMcpServersRender(tpl),
     ...tpl.configToml.hooks.UserPromptSubmit.flatMap(configTomlHookRender("UserPromptSubmit")),
     ...tpl.configToml.hooks.Stop.flatMap(configTomlHookRender("Stop")),
   ].join("\n");
@@ -155,6 +165,7 @@ const createTplStore = immerStateCreator<Store>((set, get) => {
     configTomlDelete: () => {
       rmSync(codexFilePath("config.toml"), { force: true });
     },
+    configTomlRead: () => configTomlRender(currentTplParse()),
     configTomlWrite: (content) => {
       codexFileWrite("config.toml", content);
     },
