@@ -72,31 +72,11 @@ function TargetNodeToolbar() {
           size="small"
           onClick={(event) => {
             event.stopPropagation();
-            void sseActions.nodeLlmOpenai();
+            void sseActions.nodeChatSubmit();
           }}
           onPointerDown={event => event.stopPropagation()}
         >
-          llm.openai
-        </Button>
-        <Button
-          size="small"
-          onClick={(event) => {
-            event.stopPropagation();
-            void sseActions.nodeAgentDraw();
-          }}
-          onPointerDown={event => event.stopPropagation()}
-        >
-          agent.draw
-        </Button>
-        <Button
-          size="small"
-          onClick={(event) => {
-            event.stopPropagation();
-            void sseActions.nodeAgentCodexcli();
-          }}
-          onPointerDown={event => event.stopPropagation()}
-        >
-          agent.codexcli
+          {sse.chatList[sse.chatTargetIndex]?.label ?? "chat"}
         </Button>
         <Button
           size="small"

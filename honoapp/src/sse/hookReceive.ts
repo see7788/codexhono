@@ -1,8 +1,7 @@
-import { hc } from "hono/client";
-import { z } from "zod";
-import type sseUseRouter from "../sse";
-
-export const pushHook = async () => {
+import type sseUseRouter from ".";
+import z from "zod";
+import {hc} from "hono/client";
+const pushHook = async () => {
   if (process.argv[2] !== "hook") return;
 
   const readStdin = async () => {
@@ -45,7 +44,7 @@ export const pushHook = async () => {
       return request || item.trim();
     })
     .filter(Boolean);
-  const client = hc<typeof sseUseRouter>(`http://${args.hostname}:${args.port}/codex`);
+  const client = hc<typeof sseUseRouter>(`http://${args.hostname}:${args.port}`);
   await client.ssepush.$post({
     json: {
       text: texts.length > 0 ? texts.join("\n\n") : input,
@@ -53,3 +52,8 @@ export const pushHook = async () => {
     },
   });
 };
+
+pushHook().catch((error) => {
+  console.error("honocodex hook failed:", error);
+  process.exitCode = 1;
+});

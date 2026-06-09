@@ -3,7 +3,7 @@
 import { spawnSync } from "node:child_process";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { EnvMakeOptions } from "../src/runtime.js";
+import type { EnvOptions } from "../src/runtime.js";
 import { honoStartOptions } from "./public.js";
 
 type ProcessInfo = {
@@ -123,7 +123,7 @@ if (command === "stop") {
 }
 if (command === "restart") stopDev();
 
-const runtimeEnv: EnvMakeOptions = {
+const runtimeEnv: EnvOptions = {
   CWD_PATH: process.cwd(),
   HONO_PATH: honoPath,
 };

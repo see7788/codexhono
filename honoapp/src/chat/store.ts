@@ -15,20 +15,23 @@ const stateSchema = z.object({
   }).strict()),
   codexcli: z.record(z.string(), z.unknown()),
 }).strict();
-const anthropicMessagesRoute = new Hono().post("/v1/messages", (ctx) => ctx.json<{
-  content?: Array<{ text?: string; type?: string }>,
-  error?: { message?: string },
-}>({}));
-
+const inputSchema = z.object({
+  prompt: z.string().min(1),
+}).strict();
+const testSchema = z.object({
+  baseURL: z.string().min(1),
+  model: z.string().min(1),
+  prompt: z.string().min(1),
+}).strict();
 export type Store = {
   chat: z.infer<typeof stateSchema>,
   chatActions: {
-    state: {
-      schema: typeof stateSchema
-    }
+    stateSchema: typeof stateSchema
+    inputSchema: typeof inputSchema
+    testSchema: typeof testSchema
     llm: {
       openai: {
-        config: () => {
+        defConfig: () => {
           apiKey: string,
           baseURL: string,
           model: string,
@@ -36,24 +39,24 @@ export type Store = {
           agents: Array<"codexcli">,
           defaultHeaders: Record<string, string>,
         },
-        chat: () => (prompt: string) => APIPromise<Stream<OpenAI.Chat.Completions.ChatCompletionChunk>>,
+        defFactory: () => (prompt: string) => APIPromise<Stream<OpenAI.Chat.Completions.ChatCompletionChunk>>,
         test: (input: { baseURL: string, model: string, prompt: string }) => APIPromise<Stream<OpenAI.Chat.Completions.ChatCompletionChunk>>,
       },
       anthropic: {
-        config: () => {
+        defConfig: () => {
           apiKey: string,
           baseURL: string,
           model: string,
           protocols: Array<"openai" | "anthropic">,
           agents: Array<"codexcli">,
         },
-        chat: () => (prompt: string) => Promise<string>,
+        defFactory: () => (prompt: string) => Promise<string>,
         test: (input: { baseURL: string, model: string, prompt: string }) => Promise<string>,
       },
     }
     agent: {
       codexcli: {
-        config: () => {
+        defConfig: () => {
           apiKey: string,
           baseURL: string,
           model: string,
@@ -62,13 +65,14 @@ export type Store = {
           workingDirectory: string,
           codexcli: z.infer<typeof stateSchema>["codexcli"],
         },
-        chat: () => (prompt: string) => ReturnType<Thread["runStreamed"]>,
+        defFactory: () => (prompt: string) => ReturnType<Thread["runStreamed"]>,
       },
     }
   }
 };
 
 const createStore = immerStateCreator<Store>((set, get) => {
+
   const llmopenaiConfig = () => {
     const entry = Object.entries(get().chat.llm)
       .find(([, config]) => config.protocols.includes("openai") && config.apikeys[0] && config.models[0]);
@@ -91,7 +95,7 @@ const createStore = immerStateCreator<Store>((set, get) => {
       },
     };
   }
-  const llmopenaiChat = () => {
+  const llmopenaiFactory = () => {
     const config = llmopenaiConfig();
     const openai = new OpenAI({
       apiKey: config.apiKey,
@@ -144,6 +148,10 @@ const createStore = immerStateCreator<Store>((set, get) => {
     };
   }
   const llmanthropicRequest = async (baseURL: string, apiKey: string, model: string, prompt: string) => {
+    const anthropicMessagesRoute = new Hono().post("/v1/messages", (ctx) => ctx.json<{
+      content?: Array<{ text?: string; type?: string }>,
+      error?: { message?: string },
+    }>({}));
     const response = await hc<typeof anthropicMessagesRoute>(baseURL).v1.messages.$post({
       header: {
         "anthropic-version": "2023-06-01",
@@ -160,7 +168,7 @@ const createStore = immerStateCreator<Store>((set, get) => {
     const text = body.content?.map(item => item.text).filter(item => typeof item === "string").join("");
     return text || "Chat response is empty";
   }
-  const llmanthropicChat = () => {
+  const llmanthropicFactory = () => {
     const config = llmanthropicConfig();
     return async (prompt: string) => {
       return llmanthropicRequest(config.baseURL, config.apiKey, config.model, prompt);
@@ -196,7 +204,7 @@ const createStore = immerStateCreator<Store>((set, get) => {
       codexcli,
     };
   }
-  const codexcliChat = () => {
+  const agentAodexcliFactory = () => {
     const config = codexcliConfig();
     const env = Object.fromEntries(
       Object.entries(process.env).filter((item): item is [string, string] => item[1] !== undefined),
@@ -226,27 +234,39 @@ const createStore = immerStateCreator<Store>((set, get) => {
       workingDirectory: config.workingDirectory,
     }).runStreamed(prompt)
   }
+  const defFactory: {
+    llm: {
+      openai?: (prompt: string) => APIPromise<Stream<OpenAI.Chat.Completions.ChatCompletionChunk>>
+      anthropic?: (prompt: string) => {}
+    },
+    agent: {
+      codexcli?: Thread["runStreamed"]
+    }
+  } = {
+    llm: {},
+    agent: {}
+  }
   return {
     chatActions: {
-      state: {
-        schema: stateSchema,
-      },
+      stateSchema,
+      testSchema,
+      inputSchema,
       llm: {
         openai: {
-          config: llmopenaiConfig,
-          chat: llmopenaiChat,
+          defConfig: llmopenaiConfig,
+          defFactory: llmopenaiFactory,
           test: llmopenaiTest,
         },
         anthropic: {
-          config: llmanthropicConfig,
-          chat: llmanthropicChat,
+          defConfig: llmanthropicConfig,
+          defFactory: llmanthropicFactory,
           test: llmanthropicTest,
         },
       },
       agent: {
         codexcli: {
-          config: codexcliConfig,
-          chat: codexcliChat,
+          defConfig: codexcliConfig,
+          defFactory: agentAodexcliFactory,
         },
       },
     },
@@ -255,19 +275,19 @@ const createStore = immerStateCreator<Store>((set, get) => {
         "https://openrouter.ai/api/v1": {
           protocols: ["openai"],
           agents: ["codexcli"],
-          apikeys: [""],
+          apikeys: [],
           models: ["openai/gpt-oss-120b:free"],
         },
         "https://api.deepseek.com": {
           protocols: ["openai"],
           agents: [],
-          apikeys: ["sk-9bc20b15e8f946039297ab12016f7436"],
+          apikeys: [],
           models: ["deepseek-v4-flash", "deepseek-v4-pro"],
         },
         "https://api.deepseek.com/anthropic": {
           protocols: ["anthropic"],
           agents: [],
-          apikeys: ["sk-9bc20b15e8f946039297ab12016f7436"],
+          apikeys: [],
           models: ["deepseek-v4-flash", "deepseek-v4-pro"],
         },
       },

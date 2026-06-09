@@ -14,9 +14,16 @@ import {
 import type chatRouter from "honoapp/src/chat";
 
 type Direction = "horizontal" | "vertical";
+type ChatTarget = "llm.openai.chat" | "llm.openai.draw" | "agent.codexcli.chat";
+type ChatItem = {
+  label: string;
+  target: ChatTarget;
+};
 type NodeState = {
   parentId?: string;
   data: string;
+  reqtemp?: string;
+  ssetemp?: string;
 };
 type NodesState = Record<string, NodeState>;
 type Point = { x: number; y: number };
@@ -25,22 +32,16 @@ type Start = Parameters<OnConnectStart>[1];
 type Conn = Parameters<OnConnect>[0];
 type EdgeChanges = Parameters<OnEdgesChange<Edge>>[0];
 type EdgeDels = Parameters<OnEdgesDelete<Edge>>[0];
-type DrawerChatTarget = "llm.openai" | "agent.draw" | "agent.codexcli";
 type GraphOperation =
   | { id: string; text: string; type: "node.text" }
   | { id: string; text: string; type: "node.replace" }
   | { parentId?: string; text: string; type: "node.add" }
   | { id: string; parentId?: string; type: "node.move" }
   | { id: string; type: "node.delete" };
-type DrawEvent =
-  | { text: string; type: "message" }
-  | { operation: GraphOperation; type: "operation" }
-  | { message: string; type: "error" }
-  | { type: "done" };
-
 type SseState = {
+  chatList: ChatItem[];
+  chatTargetIndex: number;
   connectionStart?: ConnectionStart;
-  drawerChatTarget: DrawerChatTarget;
   drawerNodeId?: string;
   drawerSize?: number;
   drawerText: string;
@@ -51,7 +52,6 @@ type SseState = {
   nodesState: NodesState;
   positions: Record<string, Point>;
   selectedEdgeIds: Record<string, true>;
-  streamingNodeIds: Record<string, true>;
   targetId: string;
 };
 
@@ -60,7 +60,7 @@ type SseActions = {
   connectionStartBegin: (p: Start) => void;
   connectionValid: IsValidConnection;
   drawerClose: () => void;
-  drawerChatTargetChange: (target: DrawerChatTarget) => void;
+  chatTargetIndexChange: (index: number) => void;
   drawerNodeOpen: (id: string) => void;
   drawerNodeToggle: (id: string) => void;
   drawerSizeChange: (size: number) => void;
@@ -73,10 +73,7 @@ type SseActions = {
   layoutDirectionChange: (direction: Direction) => void;
   nodeAdd: (text?: string) => void;
   nodeBranchDelete: (id?: string) => void;
-  nodeAgentDraw: (text?: string) => Promise<void>;
-  nodeChat: (prompt: string) => Promise<void>;
-  nodeLlmOpenai: (text?: string) => Promise<void>;
-  nodeAgentCodexcli: (text?: string) => Promise<void>;
+  nodeChatSubmit: () => Promise<void>;
   nodeConnect: (c: Conn) => void;
   nodeDelete: (id?: string) => void;
   nodeSelect: (node: { id: string } | string) => void;
@@ -87,7 +84,11 @@ type SseActions = {
 const emptyText = "Empty node";
 const llmOpenaiPendingText = "llm.openai 正在思考...";
 const agentCodexcliPendingText = "agent.codexcli 正在思考...";
-const streamPendingTexts = [llmOpenaiPendingText, agentCodexcliPendingText];
+const chatList: ChatItem[] = [
+  { label: "llm.openai 对话", target: "llm.openai.chat" },
+  { label: "llm.openai 画图", target: "llm.openai.draw" },
+  { label: "agent.codexcli 对话", target: "agent.codexcli.chat" },
+];
 const childHandle = "child";
 const parentHandle = "parent";
 const nodeTextRows = 2;
@@ -261,6 +262,51 @@ function outputTextClean(value: string) {
   return repaired.includes("\uFFFD") ? text : repaired;
 }
 
+function graphOperationGet(line: string): GraphOperation | undefined {
+  if (line.startsWith("```")) return undefined;
+  const jsonLine = line.startsWith("data:") ? line.slice("data:".length).trim() : line;
+  try {
+    const event = JSON.parse(jsonLine) as { operation?: unknown; type?: string };
+    const operation = (event.type === "operation" ? event.operation : event) as Partial<GraphOperation>;
+    if (
+      (operation.type === "node.text" || operation.type === "node.replace")
+      && typeof operation.id === "string"
+      && typeof operation.text === "string"
+    ) {
+      return { id: operation.id, text: operation.text, type: operation.type };
+    }
+    if (
+      operation.type === "node.add"
+      && typeof operation.text === "string"
+      && (operation.parentId === undefined || typeof operation.parentId === "string")
+    ) {
+      return { parentId: operation.parentId, text: operation.text, type: operation.type };
+    }
+    if (
+      operation.type === "node.move"
+      && typeof operation.id === "string"
+      && (operation.parentId === undefined || typeof operation.parentId === "string")
+    ) {
+      return { id: operation.id, parentId: operation.parentId, type: operation.type };
+    }
+    if (operation.type === "node.delete" && typeof operation.id === "string") {
+      return { id: operation.id, type: operation.type };
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+function nodesPromptStateGet(nodes: NodesState) {
+  return Object.fromEntries(
+    Object.entries(nodes).map(([id, node]) => [id, {
+      parentId: node.parentId,
+      data: outputTextClean(node.data),
+    }]),
+  );
+}
+
 const createStore = immerStateCreator<{ sse: SseState; sseActions: SseActions }>((set, get) => {
   const client = hc<typeof chatRouter>(location.origin);
   const initialNodes: NodesState = {
@@ -270,8 +316,9 @@ const createStore = immerStateCreator<{ sse: SseState; sseActions: SseActions }>
   };
   const initialDirection: Direction = "horizontal";
   const initialStore = {
+    chatList,
+    chatTargetIndex: 0,
     connectionStart: undefined,
-    drawerChatTarget: "llm.openai" as DrawerChatTarget,
     drawerNodeId: undefined,
     drawerSize: undefined,
     drawerText: "",
@@ -282,228 +329,7 @@ const createStore = immerStateCreator<{ sse: SseState; sseActions: SseActions }>
     nodesState: initialNodes,
     positions: positionsGet(initialDirection, initialNodes),
     selectedEdgeIds: {},
-    streamingNodeIds: {},
     targetId: "1",
-  };
-  const nodeResponseSubmit = async (
-    prompt: string,
-    pendingText: string,
-    request: (prompt: string) => Promise<Response>,
-    errorPrefix: string,
-  ) => {
-    if (!prompt.trim()) return;
-    await Promise.resolve();
-    let streamNodeId: string | undefined;
-    set((draft) => {
-      const parentId = draft.sse.nodesState[draft.sse.targetId]
-        ? draft.sse.targetId
-        : undefined;
-      const nodeId = String(Number(draft.sse.maxId) + 1);
-      streamNodeId = nodeId;
-      draft.sse.nodesState[nodeId] = {
-        parentId,
-        data: pendingText,
-      };
-      draft.sse.maxId = nodeId;
-      draft.sse.targetId = nodeId;
-      draft.sse.drawerNodeId = nodeId;
-      draft.sse.drawerText = pendingText;
-      draft.sse.streamingNodeIds[nodeId] = true;
-      const parentPosition = parentId ? draft.sse.positions[parentId] : undefined;
-      if (parentPosition) {
-        const layout = layoutOptions[draft.sse.layoutDirection];
-        const siblingIndex = Object.entries(draft.sse.nodesState)
-          .filter(([id, node]) => id !== nodeId && node.parentId === parentId)
-          .length;
-        draft.sse.positions[nodeId] = draft.sse.layoutDirection === "horizontal"
-          ? {
-            x: parentPosition.x + nodeWidth + layout.ranksep,
-            y: parentPosition.y + siblingIndex * (nodeHeight + layout.nodesep),
-          }
-          : {
-            x: parentPosition.x + siblingIndex * (nodeWidth + layout.nodesep),
-            y: parentPosition.y + nodeHeight + layout.ranksep,
-          };
-      } else {
-        draft.sse.positions = positionsNextGet(
-          draft.sse.layoutDirection,
-          draft.sse.nodesState,
-          draft.sse.positions,
-        );
-      }
-    });
-    const nodeTextPush = (text: string, stop?: boolean) => {
-      set((draft) => {
-        if (!streamNodeId) return;
-        const node = draft.sse.nodesState[streamNodeId];
-        if (!node) {
-          delete draft.sse.streamingNodeIds[streamNodeId];
-          return;
-        }
-        node.data = streamPendingTexts.includes(node.data)
-          ? text
-          : node.data + text;
-        if (stop) {
-          for (const pending of streamPendingTexts) {
-            node.data = node.data.replace(pending, "");
-          }
-          node.data = node.data.trim() || emptyText;
-          delete draft.sse.streamingNodeIds[streamNodeId];
-        }
-        if (draft.sse.drawerNodeId === streamNodeId) draft.sse.drawerText = node.data;
-      });
-    };
-    try {
-      const response = await request(prompt);
-      if (!response.ok) {
-        const text = await response.text();
-        nodeTextPush(text.trim() || `${errorPrefix} request failed: ${response.status}`, true);
-        return;
-      }
-      const reader = response.body?.getReader();
-      if (!reader) {
-        const text = await response.text();
-        nodeTextPush(text.trim() || `${errorPrefix} response has no body`, true);
-        return;
-      }
-      const decoder = new TextDecoder();
-      let output = "";
-      for (; ;) {
-        const result = await reader.read();
-        if (result.done) break;
-        const text = decoder.decode(result.value, { stream: true });
-        output += text;
-        nodeTextPush(text);
-      }
-      const rest = decoder.decode();
-      if (rest) {
-        output += rest;
-        nodeTextPush(rest);
-      }
-      nodeTextPush(output.trim() ? "" : `${errorPrefix} response is empty`, true);
-    } catch (error) {
-      nodeTextPush(error instanceof Error ? error.message : String(error), true);
-    }
-  };
-  const nodePromptSubmit = async (
-    nodeData: string | undefined,
-    pendingText: string,
-    request: (prompt: string) => Promise<Response>,
-    errorPrefix: string,
-  ) => {
-    if (nodeData !== undefined) get().sseActions.nodeTextChange(nodeData);
-    const sse = get().sse;
-    const input: string[] = [];
-    for (let id: string | undefined = sse.nodesState[sse.targetId] ? sse.targetId : undefined; id !== undefined;) {
-      const node = sse.nodesState[id];
-      if (!node) break;
-      input.unshift(outputTextClean(node.data));
-      id = node.parentId;
-    }
-    await nodeResponseSubmit(
-      input.filter(Boolean).join("\n\n"),
-      pendingText,
-      request,
-      errorPrefix,
-    );
-  };
-  const agentDrawSubmit = async (prompt: string) => {
-    if (!prompt.trim()) return;
-    const graphOperationApply = (
-      draft: { sse: SseState },
-      operation: GraphOperation,
-    ) => {
-      if (operation.type === "node.text" || operation.type === "node.replace") {
-        const node = draft.sse.nodesState[operation.id];
-        if (!node) return;
-        node.data = operation.text.trim() || emptyText;
-        if (draft.sse.drawerNodeId === operation.id) draft.sse.drawerText = node.data;
-        return;
-      }
-      if (operation.type === "node.add") {
-        const parentId = operation.parentId && draft.sse.nodesState[operation.parentId]
-          ? operation.parentId
-          : undefined;
-        const nodeId = String(Number(draft.sse.maxId) + 1);
-        draft.sse.nodesState[nodeId] = {
-          parentId,
-          data: operation.text.trim() || emptyText,
-        };
-        draft.sse.maxId = nodeId;
-        draft.sse.targetId = nodeId;
-        return;
-      }
-      if (operation.type === "node.move") {
-        const node = draft.sse.nodesState[operation.id];
-        if (!node) return;
-        if (!operation.parentId) {
-          delete node.parentId;
-          draft.sse.targetId = operation.id;
-          return;
-        }
-        if (!nodeMoveCan(operation.parentId, operation.id, draft.sse.nodesState)) return;
-        node.parentId = operation.parentId;
-        draft.sse.targetId = operation.id;
-        return;
-      }
-      const node = draft.sse.nodesState[operation.id];
-      if (!node || Object.keys(draft.sse.nodesState).length <= 1) return;
-      delete draft.sse.nodesState[operation.id];
-      if (draft.sse.drawerNodeId === operation.id) {
-        draft.sse.drawerNodeId = undefined;
-        draft.sse.drawerText = "";
-      }
-      for (const child of Object.values(draft.sse.nodesState)) {
-        if (child.parentId === operation.id) delete child.parentId;
-      }
-      if (draft.sse.targetId === operation.id) {
-        draft.sse.targetId = node.parentId && draft.sse.nodesState[node.parentId]
-          ? node.parentId
-          : firstNodeIdGet(draft.sse.nodesState) ?? draft.sse.targetId;
-      }
-    };
-    const drawEventLineReceive = (line: string) => {
-      if (!line.trim()) return;
-      const event = JSON.parse(line) as DrawEvent;
-      if (event.type === "operation") {
-        set((draft) => {
-          graphOperationApply(draft, event.operation);
-          draft.sse.positions = positionsNextGet(
-            draft.sse.layoutDirection,
-            draft.sse.nodesState,
-            draft.sse.positions,
-          );
-        });
-        return;
-      }
-      if (event.type === "error") throw new Error(event.message);
-    };
-    try {
-      const response = await client.chat.agent.draw.$post({
-        json: {
-          prompt,
-        },
-      });
-      if (!response.ok) throw new Error(await response.text());
-      if (!response.body) throw new Error("agent.draw response body is empty");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      for (;;) {
-        const result = await reader.read();
-        if (result.done) break;
-        buffer += decoder.decode(result.value, { stream: true });
-        for (let index = buffer.indexOf("\n"); index >= 0; index = buffer.indexOf("\n")) {
-          const line = buffer.slice(0, index);
-          buffer = buffer.slice(index + 1);
-          drawEventLineReceive(line);
-        }
-      }
-      buffer += decoder.decode();
-      drawEventLineReceive(buffer);
-    } catch (error) {
-      get().sseActions.nodeAdd(error instanceof Error ? error.message : String(error));
-    }
   };
   const sse: SseState = {
     ...initialStore,
@@ -515,9 +341,10 @@ const createStore = immerStateCreator<{ sse: SseState; sseActions: SseActions }>
         draft.sse.drawerText = "";
       });
     },
-    drawerChatTargetChange: (target) => {
+    chatTargetIndexChange: (index) => {
       set((draft) => {
-        draft.sse.drawerChatTarget = target;
+        if (!draft.sse.chatList[index]) return;
+        draft.sse.chatTargetIndex = index;
       });
     },
     drawerNodeOpen: (id) => {
@@ -717,9 +544,6 @@ const createStore = immerStateCreator<{ sse: SseState; sseActions: SseActions }>
           draft.sse.drawerNodeId = undefined;
           draft.sse.drawerText = "";
         }
-        for (const current of deleteIds) {
-          delete draft.sse.streamingNodeIds[current];
-        }
         if (!Object.keys(draft.sse.nodesState).length) {
           const nextId = String(Number(draft.sse.maxId) + 1);
           draft.sse.nodesState[nextId] = { data: emptyText };
@@ -735,76 +559,145 @@ const createStore = immerStateCreator<{ sse: SseState; sseActions: SseActions }>
         );
       });
     },
-    nodeAgentDraw: async (nodeData) => {
-      if (nodeData !== undefined) get().sseActions.nodeTextChange(nodeData);
+    nodeChatSubmit: async () => {
       const sse = get().sse;
-      const targetNode = sse.nodesState[sse.targetId];
-      const userPrompt = [
-        "请整理当前节点森林，只做必要的节点文本、新增或删除操作。",
-        targetNode ? outputTextClean(targetNode.data) : "",
-      ].filter(Boolean).join("\n\n");
-      if (!userPrompt.trim()) return;
-      const prompt = [
-        "You are an AI assistant that edits a project node forest.",
-        "Return newline-delimited JSON only. Do not wrap it in Markdown.",
-        "Each line must be one compact JSON event. Do not return a JSON array or wrapper object.",
-        "Allowed event shapes:",
-        "{\"type\":\"message\",\"text\":\"short progress text\"}",
-        "{\"type\":\"operation\",\"operation\":{\"type\":\"node.text\",\"id\":\"existing node id\",\"text\":\"new full node text\"}}",
-        "{\"type\":\"operation\",\"operation\":{\"type\":\"node.replace\",\"id\":\"existing node id\",\"text\":\"replacement node text\"}}",
-        "{\"type\":\"operation\",\"operation\":{\"type\":\"node.add\",\"parentId\":\"existing parent id or omitted for root\",\"text\":\"new node text\"}}",
-        "{\"type\":\"operation\",\"operation\":{\"type\":\"node.move\",\"id\":\"existing node id\",\"parentId\":\"existing parent id or omitted for root\"}}",
-        "{\"type\":\"operation\",\"operation\":{\"type\":\"node.delete\",\"id\":\"existing node id\"}}",
-        "{\"type\":\"done\"}",
-        "Do not delete every node. Prefer small, concrete edits.",
-        "Do not return markdown explanations outside NDJSON events.",
-        "Use operations instead of returning the full graph.",
-        "Target node id:",
-        sse.targetId,
-        "Existing nodes:",
-        JSON.stringify(sse.nodesState),
-        "User request:",
-        userPrompt,
-      ].join("\n\n");
-      await agentDrawSubmit(prompt);
-    },
-    nodeChat: async (prompt) => {
-      const target = get().sse.drawerChatTarget;
-      if (target === "agent.draw") {
-        await agentDrawSubmit(prompt);
+      const chatNodeId = sse.targetId;
+      const chatNode = sse.nodesState[chatNodeId];
+      if (!chatNode) return;
+      const chatItem = sse.chatList[sse.chatTargetIndex] ?? sse.chatList[0];
+      const parentTexts: string[] = [];
+      for (let id = chatNode.parentId; id !== undefined;) {
+        const node = sse.nodesState[id];
+        if (!node) break;
+        parentTexts.unshift([`node ${id}:`, outputTextClean(node.data)].filter(Boolean).join("\n"));
+        id = node.parentId;
+      }
+      const parentContext = parentTexts.join("\n\n");
+      const nodeText = outputTextClean(chatNode.data);
+      const prompt = chatItem.target === "llm.openai.draw"
+        ? [
+          "You are an AI assistant that edits a project node tree.",
+          "Return newline-delimited JSON only. Do not wrap it in Markdown.",
+          "Every non-empty output line must be one valid JSON object.",
+          "Allowed event shapes:",
+          '{"type":"message","text":"short progress text"}',
+          '{"type":"operation","operation":{"type":"node.text","id":"existing node id","text":"new full node text"}}',
+          '{"type":"operation","operation":{"type":"node.replace","id":"existing node id","text":"replacement node text"}}',
+          '{"type":"operation","operation":{"type":"node.add","parentId":"existing parent id or omitted for root","text":"new node text"}}',
+          '{"type":"operation","operation":{"type":"node.move","id":"existing node id","parentId":"existing parent id or omitted for root"}}',
+          '{"type":"operation","operation":{"type":"node.delete","id":"existing node id"}}',
+          '{"type":"done"}',
+          "Do not delete every node. Prefer small, concrete edits.",
+          "Target node id:",
+          chatNodeId,
+          "Existing nodes:",
+          JSON.stringify(nodesPromptStateGet(sse.nodesState)),
+          "User request:",
+          nodeText,
+        ].join("\n\n")
+        : [
+          chatItem.target === "agent.codexcli.chat"
+            ? "Use the project context and answer for the current node."
+            : "Answer for the current node.",
+          "Parent context:",
+          parentContext || "(none)",
+          "Current node:",
+          nodeText,
+        ].join("\n\n");
+      set((draft) => {
+        const node = draft.sse.nodesState[chatNodeId];
+        if (!node) return;
+        node.reqtemp = prompt;
+        node.ssetemp = chatItem.target === "agent.codexcli.chat" ? agentCodexcliPendingText : llmOpenaiPendingText;
+      });
+      const request = chatItem.target === "agent.codexcli.chat"
+        ? (input: string) => client.chat.agent.codexcli.$post({ json: { prompt: input } })
+        : (input: string) => client.chat.llm.openai.$post({ json: { prompt: input } });
+      let output = "";
+      try {
+        const response = await request(prompt);
+        if (!response.ok) {
+          output = (await response.text()).trim() || `${chatItem.target} request failed: ${response.status}`;
+        } else {
+          const reader = response.body?.getReader();
+          if (!reader) {
+            output = (await response.text()).trim() || `${chatItem.target} response has no body`;
+          } else {
+            const decoder = new TextDecoder();
+            for (;;) {
+              const result = await reader.read();
+              if (result.done) break;
+              output += decoder.decode(result.value, { stream: true });
+              set((draft) => {
+                const node = draft.sse.nodesState[chatNodeId];
+                if (node) node.ssetemp = output;
+              });
+            }
+            output += decoder.decode();
+          }
+        }
+      } catch (error) {
+        output = error instanceof Error ? error.message : String(error);
+      }
+      output = output.trim() || `${chatItem.target} response is empty`;
+      set((draft) => {
+        const node = draft.sse.nodesState[chatNodeId];
+        if (node) node.ssetemp = output;
+      });
+      if (chatItem.target !== "llm.openai.draw") {
+        set((draft) => {
+          const parentId = draft.sse.nodesState[chatNodeId] ? chatNodeId : undefined;
+          const nodeId = String(Number(draft.sse.maxId) + 1);
+          draft.sse.nodesState[nodeId] = { parentId, data: output };
+          draft.sse.maxId = nodeId;
+          draft.sse.targetId = nodeId;
+          draft.sse.positions = positionsNextGet(draft.sse.layoutDirection, draft.sse.nodesState, draft.sse.positions);
+        });
         return;
       }
-      if (target === "agent.codexcli") {
-        await nodeResponseSubmit(
-          prompt,
-          agentCodexcliPendingText,
-          prompt => client.chat.agent.codexcli.$post({ json: { prompt } }),
-          "agent.codexcli",
-        );
-        return;
-      }
-      await nodeResponseSubmit(
-        prompt,
-        llmOpenaiPendingText,
-        prompt => client.chat.llm.openai.$post({ json: { prompt } }),
-        "llm.openai",
-      );
-    },
-    nodeLlmOpenai: async (nodeData) => {
-      await nodePromptSubmit(
-        nodeData,
-        llmOpenaiPendingText,
-        prompt => client.chat.llm.openai.$post({ json: { prompt } }),
-        "llm.openai",
-      );
-    },
-    nodeAgentCodexcli: async (nodeData) => {
-      await nodePromptSubmit(
-        nodeData,
-        agentCodexcliPendingText,
-        prompt => client.chat.agent.codexcli.$post({ json: { prompt } }),
-        "agent.codexcli",
-      );
+      const operations = output
+        .split(/\r?\n/)
+        .map(line => graphOperationGet(line.trim()))
+        .filter((operation): operation is GraphOperation => !!operation);
+      if (!operations.length) return;
+      set((draft) => {
+        for (const operation of operations) {
+          if (operation.type === "node.text" || operation.type === "node.replace") {
+            const node = draft.sse.nodesState[operation.id];
+            if (node) node.data = operation.text.trim() || emptyText;
+            continue;
+          }
+          if (operation.type === "node.add") {
+            const parentId = operation.parentId && draft.sse.nodesState[operation.parentId] ? operation.parentId : undefined;
+            const nodeId = String(Number(draft.sse.maxId) + 1);
+            draft.sse.nodesState[nodeId] = { parentId, data: operation.text.trim() || emptyText };
+            draft.sse.maxId = nodeId;
+            draft.sse.targetId = nodeId;
+            continue;
+          }
+          if (operation.type === "node.move") {
+            const node = draft.sse.nodesState[operation.id];
+            if (!node) continue;
+            if (!operation.parentId) {
+              delete node.parentId;
+              draft.sse.targetId = operation.id;
+              continue;
+            }
+            if (!nodeMoveCan(operation.parentId, operation.id, draft.sse.nodesState)) continue;
+            node.parentId = operation.parentId;
+            draft.sse.targetId = operation.id;
+            continue;
+          }
+          const node = draft.sse.nodesState[operation.id];
+          if (!node || Object.keys(draft.sse.nodesState).length <= 1) continue;
+          delete draft.sse.nodesState[operation.id];
+          for (const child of Object.values(draft.sse.nodesState)) {
+            if (child.parentId === operation.id) delete child.parentId;
+          }
+          if (draft.sse.targetId === operation.id) draft.sse.targetId = firstNodeIdGet(draft.sse.nodesState) ?? draft.sse.targetId;
+        }
+        draft.sse.positions = positionsNextGet(draft.sse.layoutDirection, draft.sse.nodesState, draft.sse.positions);
+      });
     },
     nodeConnect: (c) => {
       const conn = connectionGet(c);
@@ -833,7 +726,6 @@ const createStore = immerStateCreator<{ sse: SseState; sseActions: SseActions }>
           draft.sse.drawerNodeId = undefined;
           draft.sse.drawerText = "";
         }
-        delete draft.sse.streamingNodeIds[nodeId];
         for (const child of Object.values(draft.sse.nodesState)) {
           if (child.parentId === nodeId) delete child.parentId;
         }

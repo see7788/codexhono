@@ -3,15 +3,7 @@ import { Button, Input, Popover, Select, Space } from "antd";
 import { Drawer } from "extendsantd/src/Drawer";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import appStore from "../store";
-
-type ChatTarget = ReturnType<typeof appStore.getState>["sse"]["drawerChatTarget"];
-
-const chatOptions: { label: string; value: ChatTarget }[] = [
-  { label: "llm.openai", value: "llm.openai" },
-  { label: "agent.draw", value: "agent.draw" },
-  { label: "agent.codexcli", value: "agent.codexcli" },
-];
+import appStore from "../../store";
 
 export default function ActionDrawer() {
   const sse = appStore(state => state.sse);
@@ -22,8 +14,13 @@ export default function ActionDrawer() {
   const [contextRatio, contextRatioSet] = useState(0.5);
   const [targetTip, setTargetTip] = useState<"del">();
   const nodeId = sse.drawerNodeId;
-  const open = !!nodeId && !!sse.nodesState[nodeId];
-  const contextText = contextTextGet(sse);
+  const node = nodeId ? sse.nodesState[nodeId] : undefined;
+  const open = !!node;
+  const contextText = node ? [node.reqtemp, node.ssetemp].filter(Boolean).join("\n\n") : "";
+  const chatOptions = sse.chatList.map((chat, index) => ({
+    label: chat.label,
+    value: index,
+  }));
 
   function chatRouteOpen() {
     navigate("/chat");
@@ -48,7 +45,7 @@ export default function ActionDrawer() {
     if (!nodeId) return;
     targetNodeSet();
     sseActions.nodeTextChange(sse.drawerText, nodeId);
-    void sseActions.nodeChat([contextText, sse.drawerText].filter(Boolean).join("\n\n"));
+    void sseActions.nodeChatSubmit();
   }
 
   function nodeDelCurrent() {
@@ -106,8 +103,8 @@ export default function ActionDrawer() {
             options={chatOptions}
             size="small"
             style={{ width: 150 }}
-            value={sse.drawerChatTarget}
-            onChange={sseActions.drawerChatTargetChange}
+            value={sse.chatTargetIndex}
+            onChange={sseActions.chatTargetIndexChange}
           />
           <Button size="small" onClick={chatRouteOpen}>设置</Button>
           <Button size="small" onClick={chatRouteOpen}>chat</Button>
@@ -212,56 +209,4 @@ export default function ActionDrawer() {
       </div>
     </Drawer>
   );
-}
-
-function contextTextGet(sse: ReturnType<typeof appStore.getState>["sse"]) {
-  const parentContext = parentContextGet(sse);
-  if (sse.drawerChatTarget === "agent.draw") {
-    return [
-      "You are an AI assistant that edits a project node tree.",
-      "Return newline-delimited JSON only. Do not wrap it in Markdown.",
-      "Each line must be one compact JSON event. Do not return a JSON array or wrapper object.",
-      "Allowed event shapes:",
-      "{\"type\":\"message\",\"text\":\"short progress text\"}",
-      "{\"type\":\"operation\",\"operation\":{\"type\":\"node.text\",\"id\":\"existing node id\",\"text\":\"new full node text\"}}",
-      "{\"type\":\"operation\",\"operation\":{\"type\":\"node.replace\",\"id\":\"existing node id\",\"text\":\"replacement node text\"}}",
-      "{\"type\":\"operation\",\"operation\":{\"type\":\"node.add\",\"parentId\":\"existing parent id or omitted for root\",\"text\":\"new node text\"}}",
-      "{\"type\":\"operation\",\"operation\":{\"type\":\"node.move\",\"id\":\"existing node id\",\"parentId\":\"existing parent id or omitted for root\"}}",
-      "{\"type\":\"operation\",\"operation\":{\"type\":\"node.delete\",\"id\":\"existing node id\"}}",
-      "{\"type\":\"done\"}",
-      "Do not delete every node. Prefer small, concrete edits.",
-      "Use operations instead of returning the full graph.",
-      "Target node id:",
-      sse.drawerNodeId ?? sse.targetId,
-      "Existing nodes:",
-      JSON.stringify(sse.nodesState),
-      "User request:",
-    ].join("\n\n");
-  }
-  if (sse.drawerChatTarget === "agent.codexcli") {
-    return [
-      "Use the project context and answer for the current node.",
-      "Parent context:",
-      parentContext || "(none)",
-      "Current node:",
-    ].join("\n\n");
-  }
-  return [
-    "Answer for the current node.",
-    "Parent context:",
-    parentContext || "(none)",
-    "Current node:",
-  ].join("\n\n");
-}
-
-function parentContextGet(sse: ReturnType<typeof appStore.getState>["sse"]) {
-  const texts: string[] = [];
-  const target = sse.drawerNodeId ? sse.nodesState[sse.drawerNodeId] : undefined;
-  for (let id = target?.parentId; id !== undefined;) {
-    const node = sse.nodesState[id];
-    if (!node) break;
-    texts.unshift([`node ${id}:`, node.data.trim()].filter(Boolean).join("\n"));
-    id = node.parentId;
-  }
-  return texts.join("\n\n");
 }

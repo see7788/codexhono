@@ -21,6 +21,7 @@ description: "涉及变量、形参、对象方法、store action、路由层级
 - 形参名使用调用方能理解的业务名，不用 `param`、`args`、`payload` 兜所有场景；事件对象、库回调等约定俗成名称除外。
 - 布尔值命名表达判断语义，例如 `isReady`、`hasError`、`canSubmit`；不要用需要反向理解的含糊名称。
 - 数组和集合命名表达元素领域，例如 `messages`、`skillDirs`；不要只写 `list`。
+- 命名长度与路径深度选择时，优先规则是保持命名短
 
 ## 前端变量
 

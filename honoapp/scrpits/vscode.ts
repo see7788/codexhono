@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { spawn, type ChildProcess } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { EnvMakeOptions } from "../src/runtime.js";
+import type { EnvOptions } from "../src/runtime.js";
 import { honoStartOptions } from "./public.js";
 /**
  * VSCode 插件入口只会约定调用这两个导出：
@@ -15,18 +15,18 @@ import { honoStartOptions } from "./public.js";
  * - vscode.workspace.onDidChangeWorkspaceFolders: 监听工作区变化。
  * - vscode.workspace.onDidChangeTextDocument: 监听文档内容变化。
  */
-const activeEditorPush = () => {
-  const editor = vscode.window.activeTextEditor;
-  if (editor) console.log(editor.document.uri.fsPath);
-};
 let server: ChildProcess;
 
 // VSCode 插件激活回调。这里拉起 hono bin，并输出当前 active editor 路径。
 export async function activate(context: vscode.ExtensionContext) {
+  const activeEditorPush = () => {
+    const editor = vscode.window.activeTextEditor;
+    if (editor) console.log(editor.document.uri.fsPath);
+  };
   const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!workspacePath) throw new Error("VSCode workspace folder is required");
   const honoPath = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const runtimeEnv: EnvMakeOptions = {
+  const runtimeEnv: EnvOptions = {
     CWD_PATH: workspacePath,
     HONO_PATH: honoPath,
   };

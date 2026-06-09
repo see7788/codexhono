@@ -38,6 +38,7 @@ description: "涉及 zustand 主仓库、切片仓库工厂、store action、业
 - 前端页面业务状态、请求状态、流式状态、订阅推送和多 action 协作进入切片仓库。
 - React 组件触发 action，action 负责请求、接收事件和写业务状态，组件只响应状态变化。
 - 页面切片优先使用单根成员承载状态和 action；复杂领域才按业务层级加深 actions 路径。
+- 遇到渲染所需的复杂的派生数据派生方法，采用增加文件名/useHook.ts风格，内部优先用useMemo，useRef,useCallBack,useAsyncFn实现组件专属hook,export default
 
 ## 后端仓库
 

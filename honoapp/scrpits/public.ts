@@ -1,7 +1,7 @@
 import { join } from "node:path";
-import type { EnvMakeOptions } from "../src/runtime.js";
+import type { EnvOptions } from "../src/runtime.js";
 
-export const honoStartOptions = (runtimeEnv: EnvMakeOptions) => {
+export const honoStartOptions = (runtimeEnv: EnvOptions) => {
   const honoPath = runtimeEnv.HONO_PATH;
   return {
     command: process.execPath,
