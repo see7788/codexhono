@@ -1,6 +1,6 @@
 import { Tabs } from "antd";
 import { lazy, Suspense, type FC } from "react";
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { HashRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 const pages = {
   chat: lazy(() => import("./chat")),
@@ -34,10 +34,10 @@ const Layout: FC = () => {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/" element={<Layout />}>
-          <Route index element={<Navigate replace to="/sse/xyflow" />} />
+          <Route index element={<Navigate replace to="/file" />} />
           <Route path="sse/*" element={<pages.sse />} />
           <Route path="chat" element={<pages.chat />} />
           <Route path="tpl" element={<pages.tpl />} />
@@ -45,6 +45,6 @@ export default function App() {
           <Route path="email" element={<pages.email />} />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 }

@@ -1,5 +1,5 @@
 import { hc } from "hono/client";
-import immerStateCreator from "extendszustand-lib/src/immerStateCreator";
+import immerStateCreator from "extends-zustand/src/immerStateCreator";
 import type codextplRouter from "honoapp/src/tpl";
 
 const client = hc<typeof codextplRouter>(location.origin);

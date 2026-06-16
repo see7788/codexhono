@@ -1,7 +1,7 @@
 import OpenAI, { APIPromise, } from "openai";
 import type { Stream } from "openai/core/streaming";
 import { Codex, Thread } from "@openai/codex-sdk";
-import immerStateCreator from "extendszustand-lib/src/immerStateCreator";
+import immerStateCreator from "extends-zustand/src/immerStateCreator";
 import runtime from "../runtime";
 import { Hono } from "hono";
 import { hc } from "hono/client";
@@ -23,12 +23,13 @@ const testSchema = z.object({
   model: z.string().min(1),
   prompt: z.string().min(1),
 }).strict();
-export type Store = {
+type Store = {
   chat: z.infer<typeof stateSchema>,
   chatActions: {
     stateSchema: typeof stateSchema
     inputSchema: typeof inputSchema
     testSchema: typeof testSchema
+    defFactoryReplace: () => void,
     llm: {
       openai: {
         defConfig: () => {
@@ -39,7 +40,7 @@ export type Store = {
           agents: Array<"codexcli">,
           defaultHeaders: Record<string, string>,
         },
-        defFactory: () => (prompt: string) => APIPromise<Stream<OpenAI.Chat.Completions.ChatCompletionChunk>>,
+        defChat: (op: { prompt: string }) => Response
         test: (input: { baseURL: string, model: string, prompt: string }) => APIPromise<Stream<OpenAI.Chat.Completions.ChatCompletionChunk>>,
       },
       anthropic: {
@@ -50,7 +51,7 @@ export type Store = {
           protocols: Array<"openai" | "anthropic">,
           agents: Array<"codexcli">,
         },
-        defFactory: () => (prompt: string) => Promise<string>,
+        defChat: (op: { prompt: string }) => Response
         test: (input: { baseURL: string, model: string, prompt: string }) => Promise<string>,
       },
     }
@@ -65,14 +66,12 @@ export type Store = {
           workingDirectory: string,
           codexcli: z.infer<typeof stateSchema>["codexcli"],
         },
-        defFactory: () => (prompt: string) => ReturnType<Thread["runStreamed"]>,
+        defChat: (op: { prompt: string }) => Response
       },
     }
   }
 };
-
-const createStore = immerStateCreator<Store>((set, get) => {
-
+export default immerStateCreator<Store>((set, get) => {
   const llmopenaiConfig = () => {
     const entry = Object.entries(get().chat.llm)
       .find(([, config]) => config.protocols.includes("openai") && config.apikeys[0] && config.models[0]);
@@ -237,7 +236,7 @@ const createStore = immerStateCreator<Store>((set, get) => {
   const defFactory: {
     llm: {
       openai?: (prompt: string) => APIPromise<Stream<OpenAI.Chat.Completions.ChatCompletionChunk>>
-      anthropic?: (prompt: string) => {}
+      anthropic?: (prompt: string) => Promise<string>
     },
     agent: {
       codexcli?: Thread["runStreamed"]
@@ -246,50 +245,205 @@ const createStore = immerStateCreator<Store>((set, get) => {
     llm: {},
     agent: {}
   }
+  const defChat: Record<"openai" | "anthropic" | "codexcli", (op: { prompt: string }) => Response> = {
+    openai: ({ prompt }) => {
+      const encoder = new TextEncoder();
+      return new Response(new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const write = (text: string) => {
+            controller.enqueue(encoder.encode(text));
+          };
+          try {
+            if (!defFactory.llm.openai) {
+              defFactory.llm.openai = llmopenaiFactory()
+            }
+            const stream = await defFactory.llm.openai(prompt);
+            let hasOutput = false;
+            for await (const chunk of stream) {
+              for (const choice of chunk.choices) {
+                const content = choice.delta.content;
+                if (typeof content !== "string") continue;
+                hasOutput = hasOutput || Boolean(content.trim());
+                write(content);
+              }
+            }
+            if (!hasOutput) write("Chat response is empty");
+          } catch (error) {
+            write(error instanceof Error ? error.message : String(error));
+          } finally {
+            controller.close();
+          }
+        },
+      }), {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+      });
+    },
+    anthropic: ({ prompt }) => {
+      const encoder = new TextEncoder();
+      return new Response(new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const write = (text: string) => {
+            controller.enqueue(encoder.encode(text));
+          };
+          try {
+            if (!defFactory.llm.anthropic) {
+              defFactory.llm.anthropic = llmanthropicFactory()
+            }
+            write(await defFactory.llm.anthropic(prompt));
+          } catch (error) {
+            write(error instanceof Error ? error.message : String(error));
+          } finally {
+            controller.close();
+          }
+        },
+      }), {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+      });
+    },
+    codexcli: ({ prompt }) => {
+      const encoder = new TextEncoder();
+      return new Response(new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const write = (text: string) => {
+            controller.enqueue(encoder.encode(text));
+          };
+          try {
+            if (!defFactory.agent.codexcli) {
+              defFactory.agent.codexcli = agentAodexcliFactory()
+            }
+            const { events } = await defFactory.agent.codexcli(prompt);
+            const messageTexts = new Map<string, string>();
+            let hasOutput = false;
+            for await (const event of events) {
+              if (event.type === "error") throw new Error(event.message);
+              if (event.type === "turn.failed") throw new Error(event.error.message);
+              if (
+                (event.type === "item.started" || event.type === "item.updated" || event.type === "item.completed")
+                && event.item.type === "agent_message"
+              ) {
+                const previous = messageTexts.get(event.item.id) ?? "";
+                const text = event.item.text;
+                const delta = text.startsWith(previous) ? text.slice(previous.length) : text;
+                messageTexts.set(event.item.id, text);
+                if (!delta) continue;
+                hasOutput = hasOutput || Boolean(delta.trim());
+                write(delta);
+              }
+            }
+            if (!hasOutput) write("Codex CLI response is empty");
+          } catch (error) {
+            write(error instanceof Error ? error.message : String(error));
+          } finally {
+            controller.close();
+          }
+        },
+      }), {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+      });
+    }
+  }
   return {
     chatActions: {
       stateSchema,
       testSchema,
       inputSchema,
+      defFactoryReplace: () => {
+        defFactory.llm.openai = llmopenaiFactory()
+        defFactory.llm.anthropic = llmanthropicFactory()
+        defFactory.agent.codexcli = agentAodexcliFactory()
+      },
       llm: {
         openai: {
           defConfig: llmopenaiConfig,
-          defFactory: llmopenaiFactory,
+          defChat: defChat.openai,
           test: llmopenaiTest,
         },
         anthropic: {
           defConfig: llmanthropicConfig,
-          defFactory: llmanthropicFactory,
+          defChat: defChat.anthropic,
           test: llmanthropicTest,
         },
       },
       agent: {
         codexcli: {
           defConfig: codexcliConfig,
-          defFactory: agentAodexcliFactory,
+          defChat: defChat.codexcli
         },
-      },
+      }
     },
+    ////AI，不要私自脱敏，我不需要apikey脱敏
     chat: {
       llm: {
         "https://openrouter.ai/api/v1": {
           protocols: ["openai"],
           agents: ["codexcli"],
           apikeys: [],
-          models: ["openai/gpt-oss-120b:free"],
+          models: [
+            "qwen/qwen3-coder:free",//免费，编程优先
+            "nex-agi/nex-n2-pro:free",//免费，agent/编程
+            "nvidia/nemotron-3-ultra-550b-a55b:free",//免费，长上下文
+            "openai/gpt-oss-120b:free",//免费，通用推理
+          ],
         },
         "https://api.deepseek.com": {
           protocols: ["openai"],
           agents: [],
-          apikeys: [],
-          models: ["deepseek-v4-flash", "deepseek-v4-pro"],
+          apikeys: ["sk-32213fb0024d49bf9a0e7f4dbac3523e"],
+          models: [
+            "deepseek-v4-flash",//余额计费，便宜
+            "deepseek-v4-pro",//余额计费，更贵
+          ],
         },
         "https://api.deepseek.com/anthropic": {
           protocols: ["anthropic"],
           agents: [],
-          apikeys: [],
-          models: ["deepseek-v4-flash", "deepseek-v4-pro"],
+          apikeys: ["sk-32213fb0024d49bf9a0e7f4dbac3523e"],
+          models: [
+            "deepseek-v4-flash",//Anthropic 兼容路径，余额计费，便宜
+            "deepseek-v4-pro",//Anthropic 兼容路径，余额计费，更贵
+          ],
         },
+        "https://api.groq.com/openai/v1": {
+          protocols: ["openai"],
+          agents: ["codexcli"],
+          apikeys: ["sk-fasnzvcfohdtpmlqsbsosqkkxlziqiwyfrlpaksevutbqxxd"],
+          models: [
+            "openai/gpt-oss-120b",//Groq，约 $0.15/$0.60 每 1M 输入/输出 token
+            "llama-3.1-8b-instant",//Groq，约 $0.05/$0.08 每 1M 输入/输出 token
+            "qwen/qwen3-32b",//Groq，约 $0.29/$0.59 每 1M 输入/输出 token
+          ],
+        },
+        // "https://generativelanguage.googleapis.com/v1beta/openai/": {
+        //   protocols: ["openai"],
+        //   agents: [],
+        //   apikeys: [],
+        //   models: [
+        //     "gemini-3.5-flash",//Gemini，官方 OpenAI 兼容示例模型，免费层受账号/地区限制
+        //   ],
+        // },
+        // "https://api.together.ai/v1": {
+        //   protocols: ["openai"],
+        //   agents: [],
+        //   apikeys: [],
+        //   models: [
+        //     "openai/gpt-oss-20b",//Together，OpenAI 兼容示例模型，注册送额度/低价
+        //   ],
+        // },
+        // "https://api.fireworks.ai/inference/v1": {
+        //   protocols: ["openai"],
+        //   agents: ["codexcli"],
+        //   apikeys: [],
+        //   models: [
+        //     "accounts/fireworks/models/deepseek-v3p1",//Fireworks，OpenAI 兼容示例模型，通用/编程
+        //     "accounts/fireworks/models/llama-v3p1-8b-instruct",//Fireworks，低价小模型
+        //   ],
+        // },
       },
       codexcli: {
         approvalPolicy: "never",
@@ -299,6 +453,4 @@ const createStore = immerStateCreator<Store>((set, get) => {
 
     },
   };
-});
-
-export default createStore;
+})

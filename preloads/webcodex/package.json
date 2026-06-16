@@ -13,8 +13,8 @@
     "@uiw/react-codemirror": "^4.25.9",
     "@xyflow/react": "^12.10.0",
     "antd": "^6.3.7",
-    "extends-antd": "workspace:*",
     "extends-zustand": "workspace:*",
+    "extends-antd": "workspace:*",
     "hono": "^4.12.18",
     "honoapp": "workspace:*",
     "immer": "10.2.0",
@@ -24,7 +24,6 @@
     "react-router-dom": "^7.15.0",
     "react-use": "^17.6.0",
     "use-immer": "^0.11.0",
-    "use-sync-external-store": "1.6.0",
     "zustand": "5.0.13"
   },
   "devDependencies": {

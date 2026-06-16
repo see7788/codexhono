@@ -22,12 +22,12 @@ type Tpl = { // 模板根对象；渲染 AGENTS.md、config.toml 和 skills
     };
     hooks: { // Codex hooks 配置
       UserPromptSubmit: Array<{ // 用户提交 prompt 时触发；features.hooks 为 true 时不能为空
-        type: "command"; // hook 类型；当前只允许 command
+        type: "command"; // hook 类型；当前只允许 command；渲染时会输出到 `[[hooks.UserPromptSubmit.hooks]]`
         command: string; // 要执行的命令；非空
         timeout: number; // 超时时间；正整数
       }>;
       Stop: Array<{ // assistant 停止输出时触发；features.hooks 为 true 时不能为空
-        type: "command"; // hook 类型；当前只允许 command
+        type: "command"; // hook 类型；当前只允许 command；渲染时会输出到 `[[hooks.Stop.hooks]]`
         command: string; // 要执行的命令；非空
         timeout: number; // 超时时间；正整数
       }>;

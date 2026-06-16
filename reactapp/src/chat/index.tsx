@@ -1,7 +1,7 @@
 import Editor from "@monaco-editor/react";
 import { ArrowDownOutlined, ArrowUpOutlined, SplitCellsOutlined } from "@ant-design/icons";
 import { Button, FloatButton, Input, Radio, Segmented } from "antd";
-import { Drawer } from "extendsantd/src/Drawer";
+import { Drawer } from "extends-antd/src/Drawer";
 import { hc } from "hono/client";
 import { useEffect, useRef, useState } from "react";
 import type { editor } from "monaco-editor";

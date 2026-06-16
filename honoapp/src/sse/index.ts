@@ -10,7 +10,7 @@ type SseMessage = {
 
 const connections = new Set<(message: SseMessage) => void>();
 
-export const sseSend =async (message: SseMessage) => {
+export const sseSend = async (message: SseMessage) => {
   for (const send of connections) {
     send(message);
   }
@@ -25,8 +25,8 @@ const ssePushRouter = new Hono()
     return ctx.json({ ok: true });
   });
 
-const sseRouter = new Hono()
-  .get("/sse", (ctx) => streamSSE(ctx, async (stream) => {
+const sseRouter = new Hono().basePath("/sse")
+  .get("/events", (ctx) => streamSSE(ctx, async (stream) => {
     const send = (message: SseMessage) => {
       void stream.writeSSE({
         data: JSON.stringify(message),

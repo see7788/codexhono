@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./honoapp" },
+    { "path": "./reactapp" },
+    { "path": "./preloads/webcodex" },
+    { "path": "../extends-vite" },
+    { "path": "../extends-antd" },
+    { "path": "../extends-zustand" }
+  ]
+}

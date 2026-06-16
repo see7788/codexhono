@@ -1,4 +1,8 @@
 packages:
   - "honoapp"
   - "reactapp"
-  - "libs/*"
+  - "!libs/*"
+  - "preloads/*"
+  - "../extends-vite"
+  - "../extends-antd"
+  - "../extends-zustand"

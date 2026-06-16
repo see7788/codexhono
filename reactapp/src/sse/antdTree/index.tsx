@@ -1,59 +1,82 @@
-import { Tree, type TreeDataNode } from "antd";
-import type { Key } from "react";
+import { Button, Space, Tree } from "antd";
 import appStore from "../../store";
+import useHook from "./useHook";
 
 export default function TreeView() {
-  const sse = appStore(state => state.sse);
-  const sseActions = appStore(state => state.sseActions);
-  const treeData = treeDataGet(sse);
-  const expandedKeys = treeExpandedKeysGet(treeData);
+    const push = appStore(state => state.sse);
+    const pushActions = appStore(state => state.sseActions);
+    const hook = useHook();
 
-  return (
-    <Tree
-      expandedKeys={expandedKeys}
-      selectedKeys={[sse.targetId]}
-      treeData={treeData}
-      onDoubleClick={(_, node) => sseActions.drawerNodeToggle(String(node.key))}
-      onSelect={(keys) => {
-        const key = keys[0];
-        if (key !== undefined) sseActions.nodeSelect(String(key));
-      }}
-    />
-  );
-}
-
-function treeDataGet(flow: ReturnType<typeof appStore.getState>["sse"]) {
-  const childrenByParentId: Record<string, string[]> = {};
-  const roots: string[] = [];
-  for (const [id, node] of Object.entries(flow.nodesState)) {
-    if (node.parentId && flow.nodesState[node.parentId]) {
-      childrenByParentId[node.parentId] ??= [];
-      childrenByParentId[node.parentId].push(id);
-    } else {
-      roots.push(id);
-    }
-  }
-  const nodeIdsSort = (ids: string[]) => ids.sort((left, right) => Number(left) - Number(right));
-  const nodeTreeGet = (id: string): TreeDataNode => {
-    const node = flow.nodesState[id];
-    return {
-      children: nodeIdsSort(childrenByParentId[id] ?? []).map(nodeTreeGet),
-      key: id,
-      title: `node ${id} ${node?.data ?? ""}`,
-    };
-  };
-  return nodeIdsSort(roots).map(nodeTreeGet);
-}
-
-function treeExpandedKeysGet(treeData: TreeDataNode[]) {
-  const keys: Key[] = [];
-  const walk = (nodes: TreeDataNode[]) => {
-    for (const node of nodes) {
-      if (!node.children?.length) continue;
-      keys.push(node.key);
-      walk(node.children);
-    }
-  };
-  walk(treeData);
-  return keys;
+    return (
+        <Tree
+            expandedKeys={hook.expandedKeys}
+            selectedKeys={[push.targetId]}
+            titleRender={(node) => {
+                const nodeId = String(node.key);
+                return (
+                    <Space size={6}>
+                        <span>{`node ${nodeId} ${push.nodesObj[nodeId]?.string ?? ""}`}</span>
+                        {nodeId === push.targetId ? (
+                            <>
+                                <Button
+                                    size="small"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        pushActions.node.childAdd(push.targetId, "");
+                                    }}
+                                >
+                                    nodeAdd
+                                </Button>
+                                <Button
+                                    size="small"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        pushActions.drawer(push.targetId);
+                                    }}
+                                >
+                                    nodeSet
+                                </Button>
+                                <Button
+                                    size="small"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        void pushActions.chat(push.targetId);
+                                    }}
+                                >
+                                    nodeChat
+                                </Button>
+                                <Button
+                                    size="small"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        pushActions.node.delete(push.targetId);
+                                    }}
+                                >
+                                    nodeDel
+                                </Button>
+                                <Button
+                                    size="small"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        pushActions.node.branchDelete(push.targetId);
+                                    }}
+                                >
+                                    branchDel
+                                </Button>
+                            </>
+                        ) : null}
+                    </Space>
+                );
+            }}
+            treeData={hook.treeData}
+            onDoubleClick={(_, node) => {
+                pushActions.drawer(String(node.key));
+            }}
+            onSelect={(keys) => {
+                const key = keys[0];
+                if (key === undefined) return;
+                pushActions.node.targetIdSet(String(key));
+            }}
+        />
+    );
 }

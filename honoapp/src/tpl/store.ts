@@ -1,12 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import immerStateCreator from "extendszustand-lib/src/immerStateCreator";
+import immerStateCreator from "extends-zustand/src/immerStateCreator";
 import { Project } from "ts-morph";
 import ts from "typescript";
 import runtime from "../runtime";
 import sourceTpl, { tplSchema, type Tpl } from "./source";
-export type Store = {
+type Store = {
   tpl: {
     source: string,
   },
@@ -83,9 +83,7 @@ const createTplStore = immerStateCreator<Store>((set, get) => {
   const configTomlHookRender = (name: keyof Tpl["configToml"]["hooks"]) =>
     (hook: Tpl["configToml"]["hooks"][typeof name][number]) => [
       `[[hooks.${name}]]`,
-      `type = ${JSON.stringify(hook.type)}`,
-      `command = ${JSON.stringify(hook.command)}`,
-      `timeout = ${hook.timeout}`,
+      `hooks = [{ type = ${JSON.stringify(hook.type)}, command = ${JSON.stringify(hook.command)}, timeout = ${hook.timeout} }]`,
       "",
     ];
   const configTomlMcpServerRender = (name: string, server: NonNullable<Tpl["configToml"]["mcpServers"]>[string]) => [
@@ -96,7 +94,7 @@ const createTplStore = immerStateCreator<Store>((set, get) => {
   ];
   const configTomlMcpServersRender = (tpl: Tpl) =>
     Object.entries(tpl.configToml.mcpServers ?? {}).flatMap(([name, server]) => configTomlMcpServerRender(name, server));
-  const configTomlRender = (tpl: Tpl) => [
+  const configTomlRender = (tpl: Tpl) => `${[
     ...(tpl.configToml.developerInstructions ? [
       `developer_instructions = ${JSON.stringify(tpl.configToml.developerInstructions.join("\n"))}`,
       "",
@@ -107,7 +105,7 @@ const createTplStore = immerStateCreator<Store>((set, get) => {
     ...configTomlMcpServersRender(tpl),
     ...tpl.configToml.hooks.UserPromptSubmit.flatMap(configTomlHookRender("UserPromptSubmit")),
     ...tpl.configToml.hooks.Stop.flatMap(configTomlHookRender("Stop")),
-  ].join("\n");
+  ].join("\n").trimEnd()}\n`;
   const frontmatterString = (value: string) => JSON.stringify(value);
   const skillRender = (dir: string, skill: Tpl["skills"][string]) => {
     return [`---`, `name: ${frontmatterString(dir)}`, `description: ${frontmatterString(skill.description)}`, "---", "", `# ${skill.title}`, skill.intro ? `\n${skill.intro}` : "", ...skill.sections.map(item => `\n${markdownSectionRender(item)}`), ""].join("\n");

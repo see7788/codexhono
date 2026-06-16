@@ -1,212 +1,152 @@
 import { ApartmentOutlined, DeleteOutlined } from "@ant-design/icons";
-import { Button, Input, Popover, Select, Space } from "antd";
-import { Drawer } from "extendsantd/src/Drawer";
-import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Button, Input, Popover, Select, Space, Splitter } from "antd";
+import { Drawer } from "extends-antd/src/Drawer";
+import { useState } from "react";
 import appStore from "../../store";
+import useHook from "./useHook";
 
-export default function ActionDrawer() {
-  const sse = appStore(state => state.sse);
-  const sseActions = appStore(state => state.sseActions);
-  const navigate = useNavigate();
-  const splitRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef(false);
-  const [contextRatio, contextRatioSet] = useState(0.5);
-  const [targetTip, setTargetTip] = useState<"del">();
-  const nodeId = sse.drawerNodeId;
-  const node = nodeId ? sse.nodesState[nodeId] : undefined;
-  const open = !!node;
-  const contextText = node ? [node.reqtemp, node.ssetemp].filter(Boolean).join("\n\n") : "";
-  const chatOptions = sse.chatList.map((chat, index) => ({
-    label: chat.label,
-    value: index,
-  }));
-
-  function chatRouteOpen() {
-    navigate("/chat");
-  }
-
-  function targetNodeSet() {
-    if (!nodeId) return;
-    sseActions.nodeSelect(nodeId);
-  }
-
-  function nodeAdd() {
-    targetNodeSet();
-    sseActions.nodeAdd();
-  }
-
-  function nodeTextSet() {
-    if (!nodeId) return;
-    sseActions.nodeTextChange(sse.drawerText, nodeId);
-  }
-
-  function nodeTextChat() {
-    if (!nodeId) return;
-    targetNodeSet();
-    sseActions.nodeTextChange(sse.drawerText, nodeId);
-    void sseActions.nodeChatSubmit();
-  }
-
-  function nodeDelCurrent() {
-    if (!nodeId) return;
-    sseActions.nodeDelete(nodeId);
-    setTargetTip(undefined);
-  }
-
-  function nodeDelBranch() {
-    if (!nodeId) return;
-    sseActions.nodeBranchDelete(nodeId);
-    setTargetTip(undefined);
-  }
-
-  function splitMove(event: React.PointerEvent<HTMLDivElement>) {
-    if (!dragRef.current) return;
-    const rect = splitRef.current?.getBoundingClientRect();
-    if (!rect?.height) return;
-    const nextRatio = (event.clientY - rect.top) / rect.height;
-    contextRatioSet(Math.min(0.8, Math.max(0.2, nextRatio)));
-  }
-
-  return (
-    <Drawer
-      autoFocus={false}
-      destroyOnHidden
-      getContainer={false}
-      mask={false}
-      onClose={sseActions.drawerClose}
-      onResizeSizeChange={sseActions.drawerSizeChange}
-      open={open}
-      placement="right"
-      push={false}
-      resizeSize={sse.drawerSize}
-      styles={{
-        body: {
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          padding: 16,
-        },
-        footer: {
-          padding: "10px 12px",
-        },
-        section: {
-          borderLeft: "1px solid rgba(127, 133, 128, .24)",
-          boxShadow: "-8px 0 22px rgba(32, 48, 32, .12)",
-        },
-      }}
-      size="min(520px, calc(100vw - 72px))"
-      title={(
-        <Space size={8}>
-          <span>{nodeId ? `node ${nodeId}` : ""}</span>
-          <Select
-            options={chatOptions}
-            size="small"
-            style={{ width: 150 }}
-            value={sse.chatTargetIndex}
-            onChange={sseActions.chatTargetIndexChange}
-          />
-          <Button size="small" onClick={chatRouteOpen}>设置</Button>
-          <Button size="small" onClick={chatRouteOpen}>chat</Button>
-        </Space>
-      )}
-      footer={(
-        <Space size={8} wrap>
-          <Button size="small" onClick={nodeAdd}>addNode</Button>
-          <Button size="small" onClick={nodeTextSet}>setNode</Button>
-          <Button size="small" onClick={nodeTextChat}>chat</Button>
-          <Popover
-            content={(
-              <Space size={6}>
-                <Button
-                  icon={<DeleteOutlined />}
-                  size="small"
-                  title="current node"
-                  onClick={nodeDelCurrent}
-                >
-                  current
-                </Button>
-                <Button
-                  icon={<ApartmentOutlined />}
-                  size="small"
-                  title="current node and child nodes"
-                  onClick={nodeDelBranch}
-                >
-                  branch
-                </Button>
-              </Space>
-            )}
+export default function PushDrawer() {
+    const push = appStore(state => state.sse);
+    const pushActions = appStore(state => state.sseActions);
+    const hook = useHook();
+    const [targetTip, targetTipSet] = useState<"nodeDel">();
+    return (
+        <Drawer
+            autoFocus={false}
             destroyOnHidden
-            fresh
-            onOpenChange={open => setTargetTip(open ? "del" : undefined)}
-            open={targetTip === "del"}
-            placement="topLeft"
-            trigger="click"
-          >
-            <Button
-              type={targetTip === "del" ? "primary" : "default"}
-              size="small"
-            >
-              del
-            </Button>
-          </Popover>
-        </Space>
-      )}
-    >
-      <div
-        ref={splitRef}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          flex: 1,
-          minHeight: 0,
-        }}
-      >
-        <Input.TextArea
-          readOnly
-          style={{
-            flex: `${contextRatio} 1 0`,
-            minHeight: 0,
-            resize: "none",
-          }}
-          value={contextText}
-        />
-        <div
-          style={{
-            cursor: "row-resize",
-            flex: "0 0 12px",
-            padding: "5px 0",
-          }}
-          onPointerDown={(event) => {
-            dragRef.current = true;
-            event.currentTarget.setPointerCapture(event.pointerId);
-          }}
-          onPointerMove={splitMove}
-          onPointerUp={(event) => {
-            dragRef.current = false;
-            event.currentTarget.releasePointerCapture(event.pointerId);
-          }}
-          onPointerCancel={() => {
-            dragRef.current = false;
-          }}
-        >
-          <div
-            style={{
-              background: "rgba(127, 133, 128, .28)",
-              height: 2,
+            getContainer={false}
+            mask={false}
+            onClose={() => pushActions.drawer(hook.nodeId)}
+            open={!!push.drawer.isOpen && !!push.nodesObj[hook.nodeId]}
+            placement="right"
+            push={false}
+            size="min(520px, calc(100vw - 72px))"
+            styles={{
+                body: {
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: "hidden",
+                    padding: 16,
+                },
+                footer: {
+                    padding: "10px 12px",
+                },
             }}
-          />
-        </div>
-        <Input.TextArea
-          style={{
-            flex: `${1 - contextRatio} 1 0`,
-            minHeight: 0,
-            resize: "none",
-          }}
-          value={sse.drawerText}
-          onChange={event => sseActions.drawerTextChange(event.target.value)}
-        />
-      </div>
-    </Drawer>
-  );
+            title={(
+                <Space size={8}>
+                    <span>{hook.nodeId ? `node ${hook.nodeId}` : ""}</span>
+                    <Select
+                        options={push.chat.items.map((chat, index) => ({ label: chat.label, value: index }))}
+                        size="small"
+                        style={{ width: 150 }}
+                        value={push.chat.index}
+                        onChange={(index) => appStore.setState((state) => {
+                            if (!state.sse.chat.items[index]) return;
+                            state.sse.chat.index = index;
+                        })}
+                    />
+                </Space>
+            )}
+            footer={(
+                <Space size={8} wrap>
+                    <Button
+                        size="small"
+                        onClick={() => pushActions.node.childAdd(hook.nodeId, "")}
+                    >
+                        nodeAdd
+                    </Button>
+                    <Button
+                        size="small"
+                        onClick={() => pushActions.node.stringSet(hook.nodeId, push.nodesObj[hook.nodeId]?.string ?? "")}
+                    >
+                        nodeSet
+                    </Button>
+                    <Button loading={hook.isChatSubmitting} size="small" onClick={hook.chatSubmit}>nodeChat</Button>
+                    <Popover
+                        content={(
+                            <Space size={6}>
+                                <Button
+                                    icon={<DeleteOutlined />}
+                                    size="small"
+                                    title="current node"
+                                    onClick={() => {
+                                        pushActions.node.delete(hook.nodeId);
+                                        targetTipSet(undefined);
+                                    }}
+                                >
+                                    current
+                                </Button>
+                                <Button
+                                    icon={<ApartmentOutlined />}
+                                    size="small"
+                                    title="current node and child nodes"
+                                    onClick={() => {
+                                        pushActions.node.branchDelete(hook.nodeId);
+                                        targetTipSet(undefined);
+                                    }}
+                                >
+                                    branch
+                                </Button>
+                            </Space>
+                        )}
+                        destroyOnHidden
+                        fresh
+                        onOpenChange={open => targetTipSet(open ? "nodeDel" : undefined)}
+                        open={targetTip === "nodeDel"}
+                        placement="topLeft"
+                        trigger="click"
+                    >
+                        <Button
+                            type={targetTip === "nodeDel" ? "primary" : "default"}
+                            size="small"
+                        >
+                            nodeDel
+                        </Button>
+                    </Popover>
+                </Space>
+            )}
+        >
+            <Splitter layout="vertical" style={{ flex: 1, minHeight: 0 }}>
+                <Splitter.Panel defaultSize="34%" min="15%" max="70%">
+                    <div
+                        style={{
+                            border: "1px solid #d9d9d9",
+                            borderRadius: 6,
+                            boxSizing: "border-box",
+                            height: "100%",
+                            overflow: "auto",
+                            padding: 8,
+                            whiteSpace: "pre-wrap",
+                        }}
+                    >
+                        {hook.contextText}
+                    </div>
+                </Splitter.Panel>
+                <Splitter.Panel defaultSize="33%" min="15%">
+                    <Input.TextArea
+                        style={{ height: "100%", resize: "none" }}
+                        value={push.nodesObj[hook.nodeId]?.string ?? ""}
+                        onChange={event => pushActions.node.stringSet(hook.nodeId, event.target.value)}
+                    />
+                </Splitter.Panel>
+                {push.chat.temp.trim() ? (
+                    <Splitter.Panel min="15%">
+                        <div
+                            style={{
+                                border: "1px solid #d9d9d9",
+                                borderRadius: 6,
+                                boxSizing: "border-box",
+                                height: "100%",
+                                overflow: "auto",
+                                padding: 8,
+                                whiteSpace: "pre-wrap",
+                            }}
+                        >
+                            {push.chat.temp}
+                        </div>
+                    </Splitter.Panel>
+                ) : null}
+            </Splitter>
+        </Drawer>
+    );
 }

@@ -17,9 +17,9 @@ var honoStartOptions = (runtimeEnv) => {
       "--include",
       join(honoPath, "src"),
       "--include",
-      join(honoPath, "../libs/create-vite-router/src"),
+      join(honoPath, "node_modules/extends-vite/src"),
       "--include",
-      join(honoPath, "../libs/extendszustand-lib/src"),
+      join(honoPath, "node_modules/extends-zustand/src"),
       "--exclude",
       join(honoPath, "../reactapp"),
       join(honoPath, "src/index.ts")
@@ -36,12 +36,12 @@ var honoStartOptions = (runtimeEnv) => {
 };
 
 // scrpits/vscode.ts
-var activeEditorPush = () => {
-  const editor = vscode.window.activeTextEditor;
-  if (editor) console.log(editor.document.uri.fsPath);
-};
 var server;
 async function activate(context) {
+  const activeEditorPush = () => {
+    const editor = vscode.window.activeTextEditor;
+    if (editor) console.log(editor.document.uri.fsPath);
+  };
   const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!workspacePath) throw new Error("VSCode workspace folder is required");
   const honoPath = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -60,7 +60,7 @@ async function activate(context) {
   activeEditorPush();
 }
 function deactivate() {
-  server?.kill();
+  server.kill();
 }
 export {
   activate,

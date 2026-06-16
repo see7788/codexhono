@@ -18,9 +18,9 @@ var honoStartOptions = (runtimeEnv2) => {
       "--include",
       join(honoPath2, "src"),
       "--include",
-      join(honoPath2, "../libs/create-vite-router/src"),
+      join(honoPath2, "node_modules/extends-vite/src"),
       "--include",
-      join(honoPath2, "../libs/extendszustand-lib/src"),
+      join(honoPath2, "node_modules/extends-zustand/src"),
       "--exclude",
       join(honoPath2, "../reactapp"),
       join(honoPath2, "src/index.ts")

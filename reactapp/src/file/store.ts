@@ -1,5 +1,5 @@
 import { hc, type InferResponseType } from "hono/client";
-import immerStateCreator from "extendszustand-lib/src/immerStateCreator";
+import immerStateCreator from "extends-zustand/src/immerStateCreator";
 import type { Key } from "react";
 import type FileRouter from "honoapp/src/file";
 
@@ -52,7 +52,7 @@ const createStore = immerStateCreator<{ file: FileState; fileActions: FileAction
       state.file.loadedKeys = keys;
     }),
     nodeLoad: async (node) => {
-      if (node.kind === "file") return;
+      if (node.isLeaf) return;
       const children = await entriesLoad(node.key);
       set((state) => {
         state.file.tree = treeUpdate(state.file.tree, node.key, children);

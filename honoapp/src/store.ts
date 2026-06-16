@@ -1,12 +1,9 @@
-import cwdPersist from "extendszustand-lib/src/cwdPersist";
+import cwdPersist from "extends-zustand/src/cwdPersist";
 import { createStore } from "zustand";
 import { immer } from "zustand/middleware/immer";
-import createChatStore, { type Store as ChatStore } from "./chat/store";
-import createTplStore, { type Store as TplStore } from "./tpl/store";
-
-type AppStore = ChatStore & TplStore;
-
-const states = createStore<AppStore>()(
+import createChatStore from "./chat/store";
+import createTplStore from "./tpl/store";
+const states = createStore<ReturnType<typeof createTplStore>&ReturnType<typeof createChatStore>>()(
   cwdPersist(
     immer((set, get, api) => ({
       ...createChatStore(set, get, api),
