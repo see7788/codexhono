@@ -1,7 +1,6 @@
 packages:
   - "honoapp"
   - "reactapp"
-  - "!libs/*"
   - "preloads/*"
   - "../extends-vite"
   - "../extends-antd"
