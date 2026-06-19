@@ -4,15 +4,19 @@
   "private": true,
   "type": "module",
   "bin": {
-    "honocodex": "./scrpits/bin.js",
-    "honocodex-dev": "./scrpits/bin.js",
-    "honocodex-stop": "./scrpits/bin.js",
-    "honocodex-restart": "./scrpits/bin.js"
+    "honocodex": "./bin/honocodex.js",
+    "honocodex-dev": "./bin/honocodex.js",
+    "honocodex-start": "./bin/honocodex.js",
+    "honocodex-stop": "./bin/honocodex.js",
+    "honocodex-restart": "./bin/honocodex.js"
   },
   "scripts": {
-    "build": "tsup scrpits/bin.ts --format esm --platform node --target node20 --splitting false --no-sourcemap --no-dts --out-dir scrpits",
     "build:vscode": "tsup scrpits/vscode.ts --format esm --platform node --target node20 --splitting false --no-sourcemap --no-dts --external vscode --out-dir scrpits",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev": "node ./bin/honocodex.js dev",
+    "start": "node ./bin/honocodex.js start",
+    "stop": "node ./bin/honocodex.js stop",
+    "restart": "node ./bin/honocodex.js restart"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.11",
@@ -29,14 +33,18 @@
     "openai": "^6.37.0",
     "ts-morph": "^28.0.0",
     "zod": "^4.4.3",
-    "zustand": "5.0.13"
+    "zustand": "5.0.13",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@types/mailparser": "^3.4.6",
     "@types/node": "^20.19.40",
     "@types/vscode": "^1.120.0",
     "tsup": "^8.5.1",
-    "tsx": "^4.21.0",
     "typescript": "5.9.3"
-  }
+  },
+  "files": [
+    "bin/",
+    "src/"
+  ]
 }

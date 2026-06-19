@@ -6,8 +6,8 @@ import { fileURLToPath } from "url";
 
 // scrpits/public.ts
 import { join } from "path";
-var honoStartOptions = (runtimeEnv) => {
-  const honoPath = runtimeEnv.HONO_PATH;
+var honoStartOptions = (runtimeOptions) => {
+  const honoPath = runtimeOptions.HONO_PATH;
   return {
     command: process.execPath,
     args: [
@@ -22,13 +22,14 @@ var honoStartOptions = (runtimeEnv) => {
       join(honoPath, "node_modules/extends-zustand/src"),
       "--exclude",
       join(honoPath, "../reactapp"),
-      join(honoPath, "src/index.ts")
+      join(honoPath, "src/index.ts"),
+      "--cwd",
+      runtimeOptions.CWD_PATH,
+      "--hono",
+      runtimeOptions.HONO_PATH
     ],
     options: {
-      env: {
-        ...process.env,
-        ...runtimeEnv
-      },
+      env: process.env,
       stdio: "inherit",
       windowsHide: true
     }
@@ -45,11 +46,11 @@ async function activate(context) {
   const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!workspacePath) throw new Error("VSCode workspace folder is required");
   const honoPath = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const runtimeEnv = {
+  const runtimeOptions = {
     CWD_PATH: workspacePath,
     HONO_PATH: honoPath
   };
-  const startOptions = honoStartOptions(runtimeEnv);
+  const startOptions = honoStartOptions(runtimeOptions);
   server = spawn(startOptions.command, startOptions.args, startOptions.options);
   context.subscriptions.push(
     // 当前文件切换时触发

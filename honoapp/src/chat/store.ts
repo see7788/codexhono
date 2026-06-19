@@ -199,7 +199,7 @@ export default immerStateCreator<Store>((set, get) => {
       model,
       modelProvider: "honocodex" as const,
       wireApi: "responses" as const,
-      workingDirectory: runtime.CWD_PATH,
+      workingDirectory: runtime.WORKSPACE_PATH,
       codexcli,
     };
   }

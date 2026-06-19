@@ -7,6 +7,9 @@ import type { editor } from "monaco-editor";
 import type { Tpl } from "honoapp/src/tpl/source";
 import ExtendsDrawer from "./ExtendsDrawer";
 import appStore from "../store";
+import initTplMonaco from "./monaco";
+
+initTplMonaco();
 
 type Nodes = Record<string, string | number>;
 type TargetRange = { target: string; start: number; end: number };

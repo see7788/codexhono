@@ -7,8 +7,8 @@ import { fileURLToPath } from "url";
 
 // scrpits/public.ts
 import { join } from "path";
-var honoStartOptions = (runtimeEnv2) => {
-  const honoPath2 = runtimeEnv2.HONO_PATH;
+var honoStartOptions = (runtimeOptions2) => {
+  const honoPath2 = runtimeOptions2.HONO_PATH;
   return {
     command: process.execPath,
     args: [
@@ -23,13 +23,14 @@ var honoStartOptions = (runtimeEnv2) => {
       join(honoPath2, "node_modules/extends-zustand/src"),
       "--exclude",
       join(honoPath2, "../reactapp"),
-      join(honoPath2, "src/index.ts")
+      join(honoPath2, "src/index.ts"),
+      "--cwd",
+      runtimeOptions2.CWD_PATH,
+      "--hono",
+      runtimeOptions2.HONO_PATH
     ],
     options: {
-      env: {
-        ...process.env,
-        ...runtimeEnv2
-      },
+      env: process.env,
       stdio: "inherit",
       windowsHide: true
     }
@@ -114,11 +115,11 @@ if (command === "stop") {
   process.exit(0);
 }
 if (command === "restart") stopDev();
-var runtimeEnv = {
+var runtimeOptions = {
   CWD_PATH: process.cwd(),
   HONO_PATH: honoPath
 };
-var startOptions = honoStartOptions(runtimeEnv);
+var startOptions = honoStartOptions(runtimeOptions);
 var result = spawnSync(startOptions.command, startOptions.args, startOptions.options);
 if (result.error) throw result.error;
 process.exit(result.status ?? 1);
