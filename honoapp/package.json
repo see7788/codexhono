@@ -3,20 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": {
-    "honocodex": "./bin/honocodex.js",
-    "honocodex-dev": "./bin/honocodex.js",
-    "honocodex-start": "./bin/honocodex.js",
-    "honocodex-stop": "./bin/honocodex.js",
-    "honocodex-restart": "./bin/honocodex.js"
-  },
   "scripts": {
     "build:vscode": "tsup scrpits/vscode.ts --format esm --platform node --target node20 --splitting false --no-sourcemap --no-dts --external vscode --out-dir scrpits",
-    "typecheck": "tsc --noEmit",
-    "dev": "node ./bin/honocodex.js dev",
-    "start": "node ./bin/honocodex.js start",
-    "stop": "node ./bin/honocodex.js stop",
-    "restart": "node ./bin/honocodex.js restart"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.11",
@@ -46,5 +35,8 @@
   "files": [
     "bin/",
     "src/"
-  ]
+  ],
+  "bin": {
+    "honoapp": "./bin/honoapp.js"
+  }
 }

@@ -1,26 +1,19 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const wrapperDir = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(wrapperDir, "..");
 const entry = resolve(wrapperDir, "../src/index.ts");
 const tsx = join(packageRoot, "node_modules", "tsx", "dist", "cli.mjs");
-const commandName = "honocodex";
+const commandName = "honoapp";
 const commandArg = process.argv[2];
-const binName = basename(process.argv[1] ?? "");
 const command = commandArg === "dev" || commandArg === "start" || commandArg === "stop" || commandArg === "restart"
   ? commandArg
-  : binName.endsWith("-stop")
-    ? "stop"
-    : binName.endsWith("-start")
-      ? "start"
-    : binName.endsWith("-restart")
-      ? "restart"
-      : "dev";
-const passthroughArgs = commandArg === command ? process.argv.slice(3) : process.argv.slice(2);
+  : undefined;
+const passthroughArgs = command ? process.argv.slice(3) : process.argv.slice(2);
 
 if (!existsSync(tsx)) {
   console.error("缺少 tsx，请先安装依赖");
@@ -33,6 +26,7 @@ const nodeEnv = command === "dev"
   : command === "start"
     ? "production"
     : process.env.NODE_ENV;
+const shouldWatch = command === "dev" || command === "restart";
 
 const processInfosGet = () => {
   if (process.platform === "win32") {
@@ -144,7 +138,10 @@ const devStopAndExit = (exitCode) => {
   }
 };
 
-const child = spawn(process.execPath, [tsx, "watch", "--clear-screen=false", entry, ...passthroughArgs], {
+const childArgs = shouldWatch
+  ? [tsx, "watch", "--clear-screen=false", entry, ...passthroughArgs]
+  : [tsx, entry, ...passthroughArgs];
+const child = spawn(process.execPath, childArgs, {
   env: {
     ...process.env,
     ...(nodeEnv ? { NODE_ENV: nodeEnv } : {}),
@@ -154,8 +151,10 @@ const child = spawn(process.execPath, [tsx, "watch", "--clear-screen=false", ent
   windowsHide: true,
 });
 
-process.once("SIGINT", () => devStopAndExit(130));
-process.once("SIGTERM", () => devStopAndExit(143));
+if (shouldWatch) {
+  process.once("SIGINT", () => devStopAndExit(130));
+  process.once("SIGTERM", () => devStopAndExit(143));
+}
 
 child.once("error", (error) => {
   console.error(error.message);

@@ -11,12 +11,6 @@
     "onStartupFinished"
   ],
   "packageManager": "pnpm@10.28.0",
-  "scripts": {
-    "link": "(npm unlink --global honoapp --no-save || echo skip unlink) && npm --prefix honoapp link && npm rebuild --global honoapp",
-    "dev": "node honoapp/scrpits/bin.js dev",
-    "stop": "node honoapp/scrpits/bin.js stop",
-    "restart": "node honoapp/scrpits/bin.js restart"
-  },
   "devDependencies": {
     "immer": "10.2.0",
     "typescript": "5.9.3",
