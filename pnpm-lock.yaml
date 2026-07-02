@@ -42,6 +42,10 @@ overrides:
 importers:
 
   .:
+    dependencies:
+      tsx:
+        specifier: 4.21.0
+        version: 4.21.0
     devDependencies:
       immer:
         specifier: 10.2.0
@@ -68,6 +72,25 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  ../extends-hono:
+    dependencies:
+      '@hono/node-server':
+        specifier: 1.19.11
+        version: 1.19.11(hono@4.12.18)
+      hono:
+        specifier: 4.12.18
+        version: 4.12.18
+      vite:
+        specifier: 8.0.11
+        version: 8.0.11(@types/node@20.19.40)(esbuild@0.27.7)(tsx@4.21.0)
+    devDependencies:
+      '@types/node':
+        specifier: 20.19.40
+        version: 20.19.40
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
   ../extends-vite:
     dependencies:
       '@hono/node-server':
@@ -80,6 +103,9 @@ importers:
         specifier: 8.0.11
         version: 8.0.11(@types/node@20.19.40)(esbuild@0.27.7)(tsx@4.21.0)
     devDependencies:
+      '@types/node':
+        specifier: 20.19.40
+        version: 20.19.40
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -116,9 +142,9 @@ importers:
       '@openai/codex-sdk':
         specifier: ^0.136.0
         version: 0.136.0
-      extends-vite:
+      extends-hono:
         specifier: workspace:*
-        version: link:../../extends-vite
+        version: link:../../extends-hono
       extends-zustand:
         specifier: workspace:*
         version: link:../../extends-zustand
@@ -140,6 +166,9 @@ importers:
       ts-morph:
         specifier: 28.0.0
         version: 28.0.0
+      tsx:
+        specifier: 4.21.0
+        version: 4.21.0
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -159,9 +188,6 @@ importers:
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(postcss@8.5.15)(tsx@4.21.0)(typescript@5.9.3)
-      tsx:
-        specifier: 4.21.0
-        version: 4.21.0
       typescript:
         specifier: 5.9.3
         version: 5.9.3

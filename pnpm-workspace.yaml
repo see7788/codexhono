@@ -5,3 +5,4 @@ packages:
   - "../extends-vite"
   - "../extends-antd"
   - "../extends-zustand"
+  - "../extends-hono"

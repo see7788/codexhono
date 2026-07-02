@@ -6,9 +6,9 @@ import { fileURLToPath } from "node:url";
 
 const wrapperDir = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(wrapperDir, "..");
-const entry = resolve(wrapperDir, "../src/index.ts");
+const entry = resolve(wrapperDir, "../honoapp/src/index.ts");
 const tsx = join(packageRoot, "node_modules", "tsx", "dist", "cli.mjs");
-const commandName = "honoapp";
+const commandName = "codexhono";
 const commandArg = process.argv[2];
 const command = commandArg === "dev" || commandArg === "start" || commandArg === "stop" || commandArg === "restart"
   ? commandArg

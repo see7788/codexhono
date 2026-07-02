@@ -111,6 +111,7 @@ const tpl: Tpl = {
       {
         title: "服务端",
         items: [
+          `src/runtime.ts是运行时配置，src/routers.ts是路由汇总(前端项目被路由托管，能支持多个前端项目),src/index.ts是入口`,
           `Hono API、外部 HTTP、SSE、WebSocket 和同进程 Hono 调用使用 ${nodes.netStyle}。`,
           `服务端 store/action 和业务状态流转使用 ${nodes.zustandStoreStyle}。`,
           `对象边界、复用、导出和作用域使用 ${nodes.scopeStyle}。`,
@@ -120,6 +121,7 @@ const tpl: Tpl = {
       {
         title: "web端",
         items: [
+          `src/routers.tsx是路由汇总,src/index.ts是入口,项目不提供vite.config.*`,
           "百行以内的组件应该是纯样式，所需复杂状态和方法应该用主仓库里对应的私有方法或者父级方法，不应该用到兄弟组件的的方法。用到兄弟方法建议用户提升状态",
           "百行以上的组件大多需要复杂的派生形参，应该来自是来组件自私有useHook，不调用兄弟组件的hook，用到兄弟方法建议用户提升状态",
           "组件私有hook用的状态应该来自主仓库里对应的私有方法、父级方法，不应该用到兄弟组件的私有方法。用到兄弟方法建议用户提升状态",

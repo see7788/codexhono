@@ -1,4 +1,35 @@
-codexhono是主要开发区，libs是复用库。
+## 快速使用
+
+如果你是从 GitHub 仓库开始使用这个项目，最省事的方式是把它当作一个可执行命令工具直接在项目脚本里调用。
+
+前置条件：
+
+- 已安装 Node.js 和 pnpm
+- 已安装并配置好 Codex CLI
+
+在你的项目的 package.json 里加入下面三条脚本：
+
+```json
+{
+  "scripts": {
+    "codexhono:dev": "pnpx --package github:see7788/codexhono codexhono dev",
+    "codexhono:stop": "pnpx --package github:see7788/codexhono codexhono stop",
+    "codexhono:restart": "pnpx --package github:see7788/codexhono codexhono restart"
+  }
+}
+```
+
+然后就可以这样使用：
+
+```bash
+pnpm codexhono:dev
+pnpm codexhono:stop
+pnpm codexhono:restart
+```
+
+## 源码说明
+
+codexhono 是主要开发区，libs 是复用库。
 
 项目边界：
 - 这不是 AGENTS 项目，因为 AGENTS.md 只给 Codex 加规则，不是运行时接口。
