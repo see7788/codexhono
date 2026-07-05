@@ -1,6 +1,6 @@
 import OpenAI, { APIPromise, } from "openai";
-import type { Stream } from "openai/core/streaming";
 import { Codex, Thread } from "@openai/codex-sdk";
+import type { Stream } from "openai/core/streaming";
 import immerStateCreator from "extends-zustand/src/immerStateCreator";
 import runtime from "../runtime";
 import { Hono } from "hono";

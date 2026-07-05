@@ -1,13 +1,23 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const wrapperDir = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(wrapperDir, "..");
 const entry = resolve(wrapperDir, "../honoapp/src/index.ts");
-const tsx = join(packageRoot, "node_modules", "tsx", "dist", "cli.mjs");
+const require = createRequire(import.meta.url);
+const tsx = (() => {
+  const localTsx = resolve(packageRoot, "node_modules", "tsx", "dist", "cli.mjs");
+  if (existsSync(localTsx)) return localTsx;
+  try {
+    return require.resolve("tsx/dist/cli.mjs", { paths: [packageRoot] });
+  } catch {
+    return undefined;
+  }
+})();
 const commandName = "codexhono";
 const commandArg = process.argv[2];
 const command = commandArg === "dev" || commandArg === "start" || commandArg === "stop" || commandArg === "restart"

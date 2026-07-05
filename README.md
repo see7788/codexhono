@@ -1,36 +1,21 @@
 ## 快速使用
 
-如果你是从 GitHub 仓库开始使用这个项目，最省事的方式是把它当作一个可执行命令工具直接在项目脚本里调用。
-
 前置条件：
-
 - 已安装 Node.js 和 pnpm
 - 已安装并配置好 Codex CLI
+- 已安装 tsx 依赖
 
-在你的项目的 package.json 里加入下面三条脚本：
-
-```json
-{
-  "scripts": {
-    "codexhono:dev": "pnpx --package github:see7788/codexhono codexhono dev",
-    "codexhono:stop": "pnpx --package github:see7788/codexhono codexhono stop",
-    "codexhono:restart": "pnpx --package github:see7788/codexhono codexhono restart"
-  }
-}
-```
-
-然后就可以这样使用：
-
+使用方式
 ```bash
-pnpm codexhono:dev
-pnpm codexhono:stop
-pnpm codexhono:restart
+pnpm dlx github:see7788/codexhono dev
+pnpm dlx github:see7788/codexhono stop
+pnpm dlx github:see7788/codexhono restart
 ```
+建议与项目的dev命令合并
 
 ## 源码说明
 
 codexhono 是主要开发区，libs 是复用库。
-
 项目边界：
 - 这不是 AGENTS 项目，因为 AGENTS.md 只给 Codex 加规则，不是运行时接口。
 - 这不是 Skill 项目，因为 Skill 只给 Codex 加能力说明或工作流，不是事件流。
@@ -53,3 +38,39 @@ codexhono 是主要开发区，libs 是复用库。
 核心设计：
 - 一次 AI 调用被看作一次函数调用：上下文对象数组是入参，Codex CLI 是执行器，流式回复是返回值，hook 事件是旁路观察日志。
 - Web 页面是上下文编辑器，负责收集、裁剪、排序和展示上下文。会话从叶子节点多方式发起。
+
+## 项目结构
+```txt
+codexhono/
+├─ bin/
+│  └─ codexhono.js           # CLI 包装入口，负责把命令转发到实际启动逻辑
+├─ honoapp/
+│  ├─ src/
+│  │  ├─ index.ts            # 服务启动入口
+│  │  ├─ routers.ts          # 路由定义
+│  │  ├─ runtime.ts          # 运行时初始化
+│  │  ├─ store.ts            # 状态管理
+│  │  ├─ chat/               # 聊天相关能力
+│  │  ├─ email/              # 邮件相关能力
+│  │  ├─ file/               # 文件相关能力
+│  │  ├─ sse/                # SSE 流式通信
+│  │  └─ tpl/                # 模板与素材
+│  └─ scrpits/
+│     └─ vscode.ts           # VS Code 相关脚本入口
+├─ preloads/
+│  └─ webcodex/              # 预加载脚本
+├─ reactapp/
+│  ├─ src/
+│  │  ├─ App.tsx             # 页面主入口
+│  │  ├─ main.tsx            # 前端启动入口
+│  │  ├─ store.ts            # 前端状态
+│  │  ├─ chat/               # 前端聊天模块
+│  │  ├─ email/              # 前端邮件模块
+│  │  ├─ file/               # 前端文件模块
+│  │  ├─ sse/                # 前端 SSE 模块
+│  │  └─ tpl/                # 前端模板模块
+│  └─ vite.config.ts         # Vite 配置
+├─ package.json
+├─ pnpm-workspace.yaml
+└─ tsconfig.json
+```

@@ -132,8 +132,10 @@ const tpl: Tpl = {
           `变量、形参和方法命名使用 ${nodes.variableStyle}。`,
         ],
         orderedItems: [
-          `用 Chrome DevTools MCP 访问${nodes.ORIGIN}（host=${nodes.HOSTNAME}，port=${nodes.PORT}）`,
-          "服务不可达时在pnpm 根目录执行`pnpm restart`,不要在子项目内执行pnpm",
+          `pnpm dlx github:see7788/codexhono restart 是codexhono服务重启命令，这个服务用于管理维护.codex`,
+          `用户提到用可观察浏览器、查看上下文以及类似要求时，先检查用户dev命令是否带上codexhono；若是pnpm项目必须在根定义dev命令`,
+          `若未带上，你停下来，告诉用户dev命令补全的具体写法，用户必须改正并且重启dev，重启dev，等待服务启动后有新的.codex时再继续；`,
+          `若已带上 Chrome DevTools MCP 访问${nodes.ORIGIN}（host=${nodes.HOSTNAME}，port=${nodes.PORT}）`,
         ],
       },
     ],

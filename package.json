@@ -62,5 +62,15 @@
   ],
   "dependencies": {
     "tsx": "^4.20.6"
+  },
+  "author": "see7788",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/see7788/codexhono.git"
+  },
+  "homepage": "https://github.com/see7788/codexhono",
+  "bugs": {
+    "url": "https://github.com/see7788/codexhono/issues"
   }
 }
