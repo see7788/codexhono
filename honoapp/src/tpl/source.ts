@@ -82,6 +82,9 @@ const nodes = {
   HOSTNAME: "HONOCODEX_HOSTNAME",
   PORT: "HONOCODEX_PORT",
   ORIGIN: "HONOCODEX_ORIGIN",
+  checklistStyle: "checklist-styleskill",
+  codebaseMcpStyle: "codebase-mcp-styleskill",
+  docStyle: "doc-styleskill",
   fileIo: "file-io-styleskill",
   netStyle: "net-styleskill",
   scopeStyle: "scope-styleskill",
@@ -103,6 +106,11 @@ const tpl: Tpl = {
           "同文件内，遇到跨方法复用、归一化需要的时候，才定义文件级形参，严禁单点调用的helper、严禁为工程化预留僵尸",
           "遇到跨文件复用的形参，把文件变成文件名/index.ts|tsx，增加文件名/store.ts切片仓库的方式管理公共export default",
           "用户目前要求的行为，先按运行侧和横切域组合选择 skill",
+          `任务拆解、进度状态和多阶段验证使用 ${nodes.checklistStyle}。`,
+          `代码库检索、调用关系、影响范围和代码库 MCP 选择使用 ${nodes.codebaseMcpStyle}。`,
+          `README、项目说明、公开结构说明使用 ${nodes.docStyle}。`,
+          "pnpm workspace 项目只允许根 package.json 定义 scripts 命令入口；具体子项目不写 scripts，除非用户明确要求该子项目独立运行。该规则只约束 scripts，不禁止根 package.json 暴露真实 bin。",
+          "禁止为子项目随手增加无实际入口使用的 vite.config.ts、配置包、环境变量桥接文件或兼容壳文件；需要 Vite 时由真实运行方托管和配置。",
           "场景判断采用组合模型：先判断运行侧（前端或后端），再叠加横切域（仓库、网络、变量/命名、作用域）。横切域必须放在前端或后端语境下解释。",
           "总纲只负责前端/后端分流和横切域组合；具体实现规则进入对应 skill 的前端或后端章节。",
           "出现 bug、报错、服务不可达、页面异常或行为不符合预期时，并且用户没有提供skill时，停止工作，告诉用户缺少什么性质的skill，让用户先实现skill",
@@ -112,6 +120,15 @@ const tpl: Tpl = {
         title: "服务端",
         items: [
           `src/runtime.ts是运行时配置，src/routers.ts是路由汇总(前端项目被路由托管，能支持多个前端项目),src/index.ts是入口`,
+          "src/index.ts只负责启动运行时，不直接挂载业务模块、不手写子模块路径、不承载 Hono 业务接口。",
+          "src/routers.ts只负责汇总路由；业务模块目录的 index.ts 必须默认导出已经带 basePath 的完整 Hono router，routers.ts 统一 `.route(\"/\", xxxRouter)`。",
+          "所有 web 项目必须由 Hono 托管；托管根路径必须等于 web 项目的 package.name，例如 admin-web -> /admin-web、user-web -> /user-web。",
+          "web 项目的 package.name 必须是可直接作为 URL path segment 的非 scoped 名称；不要使用 @scope/admin-web 这类不能直接等价为 basePath 的名称。",
+          "同一个 web 项目的 package.name、Hono 托管根路径、私有 API 根路径必须一致；私有 API 放在该 basePath 下的固定子路径，例如 /admin-web/api/...，禁止另建 /admin-api、/api/admin、/admin 这类不一致入口。",
+          "src/routers.ts 负责同时汇总业务 Hono router 和 Vite web 托管 router；src/index.ts 不直接托管 Vite 项目。",
+          "src/routers.ts 挂载 Vite 项目时只读取 web 项目的 package.name 和项目 root；web 项目不暴露 host、port、origin 或 basePath 环境变量桥接。",
+          "服务端目录按真实对象或真实子包建立；模块目录内优先使用 index.ts + store.ts，index.ts 只处理 Hono 请求响应，复杂业务动作进入同目录 store.ts 或对象边界。",
+          "禁止创建只有 re-export、类型倒贴、一对一 wrapper 或为了补路径而存在的壳文件。",
           `Hono API、外部 HTTP、SSE、WebSocket 和同进程 Hono 调用使用 ${nodes.netStyle}。`,
           `服务端 store/action 和业务状态流转使用 ${nodes.zustandStoreStyle}。`,
           `对象边界、复用、导出和作用域使用 ${nodes.scopeStyle}。`,
@@ -122,6 +139,8 @@ const tpl: Tpl = {
         title: "web端",
         items: [
           `src/routers.tsx是路由汇总,src/index.ts是入口,项目不提供vite.config.*`,
+          "web 项目被 Hono 托管后，前端不写 host、port、origin；API basePath 从 window.location.pathname 第一段读取，或在当前项目根路径内使用相对路径。",
+          "web 项目不提供 vite.config.*；Vite 构建和托管由服务端 Hono 侧统一处理，web 子项目只提供源码、package.name 和必要入口文件。",
           "百行以内的组件应该是纯样式，所需复杂状态和方法应该用主仓库里对应的私有方法或者父级方法，不应该用到兄弟组件的的方法。用到兄弟方法建议用户提升状态",
           "百行以上的组件大多需要复杂的派生形参，应该来自是来组件自私有useHook，不调用兄弟组件的hook，用到兄弟方法建议用户提升状态",
           "组件私有hook用的状态应该来自主仓库里对应的私有方法、父级方法，不应该用到兄弟组件的私有方法。用到兄弟方法建议用户提升状态",
@@ -132,8 +151,8 @@ const tpl: Tpl = {
           `变量、形参和方法命名使用 ${nodes.variableStyle}。`,
         ],
         orderedItems: [
-          `pnpm dlx github:see7788/codexhono restart 是codexhono服务重启命令，这个服务用于管理维护.codex`,
-          `用户提到用可观察浏览器、查看上下文以及类似要求时，先检查用户dev命令是否带上codexhono；若是pnpm项目必须在根定义dev命令`,
+          `pnpm dlx github:see7788/extends-codex restart 是 extends-codex 服务重启命令，这个服务用于管理维护 .codex`,
+          `用户提到用可观察浏览器、查看上下文以及类似要求时，先检查用户 dev 命令是否带上 extends-codex；若是 pnpm 项目必须在根定义 dev 命令`,
           `若未带上，你停下来，告诉用户dev命令补全的具体写法，用户必须改正并且重启dev，重启dev，等待服务启动后有新的.codex时再继续；`,
           `若已带上 Chrome DevTools MCP 访问${nodes.ORIGIN}（host=${nodes.HOSTNAME}，port=${nodes.PORT}）`,
         ],
@@ -284,6 +303,9 @@ const tpl: Tpl = {
           title: "后端作用域",
           items: [
             "后端路由入口只负责读取请求、校验输入、调用业务对象或 store action、返回响应；复杂业务流程不要堆在 route handler 里。",
+            "服务端模块按真实对象或真实子包建目录；只有被多个模块共同消费的对象才上提到更高目录。",
+            "模块私有 schema、协议字段、派生值和辅助逻辑留在模块目录内；跨 route 共享的业务状态和动作收敛到同目录 store.ts。",
+            "src/index.ts 是进程入口，src/routers.ts 是路由聚合入口；二者不是业务对象目录，不放业务 action、schema、缓存实例或页面专用工具。",
             "对象边界不是 class 形式要求，而是业务边界要求：状态、配置、缓存实例、schema、派生值和维护不变量的动作应收敛在同一个对象边界内。",
             "有状态实体优先封装为对象；状态字段、派生字段和维护不变量的方法必须收敛在同一个对象内。",
             "对象拥有的输入契约、schema、缓存和派生状态应一起收敛在对象内；禁止把单个对象私有的 schema 散落成文件级变量。",
@@ -301,6 +323,8 @@ const tpl: Tpl = {
           items: [
             "杜绝无外部调用的 export。",
             "页面、路由入口、私有组件文件默认使用 default export；只有跨文件实际共享的类型、schema、store 工厂、明确 API 才使用命名 export。",
+            "禁止创建只包含 `export type ... from ...`、`export { ... } from ...` 或单纯转发 default 的文件；除非它是包级 public API 边界且有多个真实外部消费者。",
+            "Hono 模块目录 index.ts 默认导出完整 router；store.ts 默认导出切片工厂；私有工具和私有类型不导出。",
             "lib 库导出只写最短 `exports`，不要写啰嗦的 `types/import` 配置。",
           ],
         },
@@ -332,6 +356,7 @@ const tpl: Tpl = {
           title: "主仓库",
           items: [
             "主仓库只负责组合切片、配置 persist/immer、定义持久化和 rehydrate；不要在主仓库实现具体业务 action。",
+            "主仓库不定义业务类型、业务常量、schema、工具函数或运行时对象；这些内容属于对应对象目录的切片仓库或对象边界。",
             "主仓库类型只表达切片并入关系；前端可用 `ReturnType<typeof createFile> & ReturnType<typeof createTpl>` 推导，服务端可按既有切片 `Store` 类型交叉并入。",
             "主仓库导入切片时只默认导入切片工厂；除项目既有服务端 `Store` 类型交叉并入外，不从切片导入私有类型、常量或工具函数。",
           ],
@@ -424,6 +449,14 @@ const tpl: Tpl = {
         {
           title: "后端网络 - Hono API",
           items: [
+            "每个 Hono 模块目录的 index.ts 必须自己声明 `new Hono().basePath(\"/模块路径\")`，并默认导出完整 router。",
+            "src/routers.ts 只导入各模块默认 router 并 `.route(\"/\", router)` 汇总；不要在 routers.ts 或 src/index.ts 手写模块内部路径。",
+            "Vite web 项目托管到 Hono 时使用 web package.name 作为 basePath；不要手写 /admin、/user 这类与包名不一致的路径。",
+            "web 项目的 package.name 必须是可直接作为 URL path segment 的非 scoped 名称；不接受 @scope/admin-web 这类不能直接等价为 basePath 的名称。",
+            "同一个 web 项目的私有 API router 和 Vite 静态托管 router 使用同一个 basePath；API router 先挂载并使用 /basePath/api/... 子路径，Vite router 后挂载。",
+            "Vite 静态托管 router 必须最后挂载，只处理静态资源和 SPA fallback；不得吞掉 API、SSE、WebSocket、POST、PUT、DELETE 等业务请求。",
+            "src/routers.ts 挂载 Vite 项目时只读取 web 项目的 package.name 和项目 root；web 项目不暴露 host、port、origin、basePath 环境变量桥接。",
+            "模块 router 的类型来自真实 Hono router；web 侧使用 `hc<typeof router>` 推导接口类型，禁止为 web 手搓 contract 或倒贴类型文件。",
             "路由路径按业务层级组织，避免把领域压扁成难读路径；路由和 action 层级命名使用 variable-style。",
             `handler 只负责读取请求、校验输入、调用业务对象或 store action、返回响应；复杂业务流程不要堆在 route handler 里，业务边界不存在时按 ${nodes.scopeStyle}「后端作用域」或 ${nodes.zustandStoreStyle}「后端仓库」建最小业务对象或 action。`,
             "服务端接口禁止 `ctx.json() as ...`；响应类型写在 `ctx.json<T>(...)` 的泛型参数里。",
@@ -437,6 +470,9 @@ const tpl: Tpl = {
             "React 组件不直接请求服务端接口；页面交互触发 zustand action，action 负责请求和写业务状态。",
             `页面交互、组件职责和 UI 临时态使用 ${nodes.scopeStyle}「前端作用域」；业务状态流转使用 ${nodes.zustandStoreStyle}「前端仓库」。`,
             "页面请求本项目 Hono API 时优先使用项目统一的 Hono `hc` 客户端类型推导，不在组件里散写裸 `fetch`。",
+            "页面 API 类型必须来自服务端真实导出的 Hono router 类型；不要在 web 项目或 contract 包里手写一份平行接口类型。",
+            "web 项目被 Hono 托管后，前端不写 host、port、origin；API basePath 从 window.location.pathname 第一段读取，或在当前项目根路径内使用相对路径。",
+            "同一个 web 项目的页面请求只访问该项目 basePath 下的私有 API，例如 /admin-web/api/...；禁止请求 /admin-api、/api/admin、硬编码 origin 或跨项目私有 API。",
             "页面不要直接请求第三方或远端 API；第三方 API 由服务端 Hono 接口封装，再由页面请求本项目 API。",
             "页面请求的 loading、error、data 等业务状态进入 store；组件只响应状态变化并触发 action。",
             "页面订阅 SSE 或 WebSocket 时，连接生命周期和消息处理进入 store action。",
@@ -546,6 +582,137 @@ const tpl: Tpl = {
               "return ctx.json(body);",
             ].join("\n"),
           },
+        },
+      ],
+    },
+    [nodes.codebaseMcpStyle]: {
+      description: "涉及代码库 MCP 选择、代码检索、调用关系、影响范围、仓库结构可视化和改代码前上下文获取时使用。",
+      title: "代码库 MCP 使用风格",
+      sections: [
+        {
+          title: "分流规则",
+          items: [
+            "默认使用 Codegraph 作为代码库主力 MCP；改代码前的源码定位、调用关系、调用路径和影响范围分析优先走 Codegraph。",
+            "Graphifyy 不作为清晰源码地图主方案；用户要明确文件结构、具体方法、callers/callees 调用链时，优先使用 Codegraph 或 IDE 级源码阅读能力。",
+            "Graphifyy 只作为项目级全局图谱体验工具；只在用户明确要看全局项目地图、模块关系、调用流图或可视化体验时触发。",
+            "Graphifyy、RepoGraph 或其他图谱可视化工具只作为全局结构、模块关系和依赖地图的辅助，不作为日常改代码第一入口。",
+            "安全审计、污点分析、跨函数数据流或漏洞路径分析才使用 codebadger、Joern CPG 这类安全/数据流工具。",
+            "企业级多仓库全文搜索、跨仓库符号检索或代码平台级查询才考虑 Sourcegraph 类工具。",
+          ],
+        },
+        {
+          title: "加载和安装",
+          items: [
+            "Codegraph 由生成的 config.toml 的 mcpServers.codegraph 加载，命令为 npx @colbymchenry/codegraph serve --mcp；如果当前会话没有暴露 Codegraph 工具，说明 MCP 未加载或需要重启会话，不要假装已使用。",
+            "Graphifyy 不是默认 MCP；CLI 缺失时使用 uv tool install graphifyy 安装，安装后会提供 graphify 和 graphify-mcp 命令。",
+            "需要把 Graphifyy 作为 Codex skill 使用时，才执行 graphify install --platform codex；模板项目中不要手改 .codex 产物来安装 Graphifyy，应回到 source.ts 维护规则。",
+          ],
+        },
+        {
+          title: "Codegraph",
+          items: [
+            "遇到“这个函数怎么工作”“谁调用它”“改这里影响哪里”“从 A 怎么到 B”这类问题，先用 Codegraph 获取源码、调用路径和 blast radius。",
+            "读取或编辑能命名的文件、函数、组件、store、route 或 action 前，先用 Codegraph 查询对应符号或路径。",
+            "追踪流程时在一次 Codegraph 查询里同时写出关键端点名，例如入口 route、store action、渲染函数或目标方法。",
+            "Codegraph 已返回的源码视为已读；不要为了重复确认再用普通 grep/read 走一遍，除非文件刚被编辑且索引明确提示过期。",
+          ],
+        },
+        {
+          title: "Graphifyy",
+          items: [
+            "用户说“项目地图”“可视化依赖关系”“调用关系图”“让我体验图谱”且接受全局图谱体验时，使用 Graphifyy 生成图谱，而不是只给文本说明。",
+            "用户要求清晰源码地图、文件结构、具体方法、具体方法调用链、callers/callees 时，不把 Graphifyy 当主方案；改用 Codegraph 或建议 IDE call hierarchy。",
+            "没有 LLM API key 且只需要源码结构时，优先运行 graphify . --code-only；需要文档、图片或语义抽取时，再按可用 API key 选择后端。",
+            "常用可视化产物：graphify tree --graph graphify-out/graph.json --output graphify-out/GRAPH_TREE.html；graphify cluster-only . --no-label；graphify export callflow-html。",
+            "生成后把 graphify-out/graph.html、graphify-out/GRAPH_TREE.html、graphify-out/*-callflow.html 作为用户可打开的体验入口说明清楚。",
+          ],
+        },
+        {
+          title: "验证边界",
+          items: [
+            "Codegraph 负责结构上下文，不替代真实验证；改完代码后仍用 TypeScript、测试、构建、接口响应或页面观察验证行为。",
+            "rg 适合补充查找文本、配置、文档和 Codegraph 未覆盖内容；不要用 rg 重建 Codegraph 已经给出的调用关系。",
+            "Graphifyy 只适合回答“仓库整体长什么样”“模块怎么连”“调用流如何可视化”的粗粒度问题；具体修改仍回到 Codegraph 和真实验证。",
+          ],
+        },
+      ],
+    },
+    [nodes.checklistStyle]: {
+      description: "涉及任务拆解、进度状态、阻塞同步和多阶段验证时使用。约束 checklist 触发条件、状态标记和完成表达。",
+      title: "Checklist 任务状态",
+      sections: [
+        {
+          title: "触发规则",
+          items: [
+            "只要满足以下任一条件，必须自动拆 checklist：用户提问包含多个待解决点；预计会修改多个文件；属于批量改动；需要多阶段验证。",
+            "触发 checklist 后，先列 checklist 再动手；执行中用户问进度、状态、做到哪了时，必须补充或同步当前 checklist 状态。",
+            "简单单点问答或单文件小改不强制使用 checklist。",
+          ],
+        },
+        {
+          title: "状态同步",
+          items: [
+            "checklist 只记录当前任务的关键目标、将修改的文件或阶段、必要验证项。",
+            "触发 checklist 时，默认最后一项是“文档与源码对齐”；如果任务不涉及文档、公开说明或生成模板，同步状态时说明不需要文档变更。",
+            "执行中按需同步 checklist 状态：`[ ]` 未开始，`[~]` 进行中，`[x]` 已完成，`[!]` 被阻塞。",
+            "只有 checklist 目标项都处理完并完成必要验证后，才使用“完成了”“已处理完”等收工表达；阻塞时明确卡在哪项和下一步需要什么。",
+          ],
+        },
+        {
+          title: "收尾检查",
+          items: [
+            "每轮工作收尾前必须检查本轮是否有被用户打断、中途暴露、计划中列出但未完成的事项。",
+            "未完成事项能继续处理就继续处理；不能处理时记录到根目录 TODO.md，并写清阻塞原因、下一步动作和相关文件。",
+            "如果项目已有明确 TODO 文件或任务规范，沿用既有规范；没有时使用根目录 TODO.md，不把未完成事项散落在回复里。",
+          ],
+        },
+      ],
+    },
+    [nodes.docStyle]: {
+      description: "编写 README、项目说明和公开结构说明时使用。约束项目功能、快速使用、tree 风格结构和公开入口能力说明。",
+      title: "文档写作风格",
+      sections: [
+        {
+          title: "README",
+          orderedItems: [
+            "第一段写项目功能和快速使用方法。先用简短自然语言说明项目解决什么问题、主要提供什么能力、适合什么场景；再给出最短可运行的使用命令、入口或调用方式。第一段不写长篇背景，不把实现细节放在使用方法前面。",
+            "第二段写项目结构，并保持当前 README 的带连线 tree 风格。tree 先展示源码结构，再在关键文件节点下展开公开的主要方法、命令、接口或配置子节点；文件注释只概括该文件边界，具体能力写在子节点。内部临时文件、构建产物和没有公开能力的实现细节不进入 tree。",
+          ],
+        },
+        {
+          title: "tree 格式",
+          items: [
+            "项目结构必须写成 Markdown fenced code block 内的带连线 tree；必须使用 `├──`、`└──`、`│` 表达层级和同级关系。",
+            "tree 必须按 `目录/文件 -> 对外方法/命令/接口/配置 -> 具体职责` 组织；清晰表达对象可以被怎样操作，不写散文式职责说明。",
+            "禁止用普通缩进、无连线列表、Markdown `-` 列表或纯路径清单替代 tree；如果没有连线字符，视为没有遵守 doc-styleskill。",
+            "目录节点以 `/` 结尾；文件节点写文件名和边界职责；文件下的公开方法、命令、接口或配置项继续作为子节点展开。",
+            "同级节点必须保持纵向连线对齐；最后一个同级节点使用 `└──`，非最后一个同级节点使用 `├──`。",
+          ],
+          code: {
+            language: "text",
+            content: [
+              "src/",
+              "├── index.ts                 # 入口，只负责启动和组合",
+              "├── routers.ts               # 路由汇总",
+              "└── tpl/",
+              "    ├── source.ts            # 模板源",
+              "    │   ├── nodes            # 生成产物共享常量",
+              "    │   └── tpl              # .codex 生成模板",
+              "    └── store.ts             # 模板渲染",
+              "        ├── codexRender()    # 渲染 .codex 文件集合",
+              "        └── skillRender()    # 渲染单个 skill",
+            ].join("\n"),
+          },
+        },
+        {
+          title: "结构说明",
+          items: [
+            "tree 以源码目录和文件为骨架，只展开关键公开入口；不要把普通实现细节、私有 helper 或调用过程写进 tree。",
+            "对象目录名称本身就是边界；文档和代码都应围绕对象目录说明可调用方法和职责，避免重复解释已经由目录名表达的概念。",
+            "文件节点只写边界职责；文件下的子节点写公开的主要方法、命令、接口或配置项，并说明它直接提供的能力。",
+            "能力提供方只写提供什么，不写哪里消费了它；消费方如果依赖其他公开能力，才在自身子节点说明消费链路。",
+            "子节点保持少量、主要、可维护；同类方法过多时合并为能力组，不把 README 写成完整 API 清单。",
+          ],
         },
       ],
     },

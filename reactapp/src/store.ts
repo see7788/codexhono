@@ -13,7 +13,7 @@ export default create<ReturnType<typeof createFile>
       ...createTpl(set, get, api),
     }
   }), {
-    name: "codexhono",
+    name: "extends-codex",
     storage: createJSONStorage(() => localStorage),
     partialize: store => {
       return Object.fromEntries(

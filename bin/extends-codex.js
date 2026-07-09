@@ -10,16 +10,18 @@ const packageRoot = resolve(wrapperDir, "..");
 const entry = resolve(wrapperDir, "../honoapp/src/index.ts");
 const require = createRequire(import.meta.url);
 const tsxResolve = () => {
-  const localTsx = resolve(packageRoot, "node_modules", "tsx", "dist", "cli.mjs");
-  if (existsSync(localTsx)) return localTsx;
-  try {
-    return require.resolve("tsx/dist/cli.mjs", { paths: [packageRoot] });
-  } catch {
-    return undefined;
+  for (const basePath of [packageRoot, wrapperDir, dirname(entry)]) {
+    const localTsx = resolve(basePath, "node_modules", "tsx", "dist", "cli.mjs");
+    if (existsSync(localTsx)) return localTsx;
+    try {
+      return require.resolve("tsx/cli", { paths: [basePath] });
+    } catch {
+      // Try next explicit runtime location.
+    }
   }
+  return undefined;
 };
-let tsx = tsxResolve();
-const commandName = "codexhono";
+const commandName = "extends-codex";
 const commandArg = process.argv[2];
 const command = commandArg === "dev" || commandArg === "start" || commandArg === "stop" || commandArg === "restart"
   ? commandArg
@@ -28,10 +30,10 @@ const passthroughArgs = command ? process.argv.slice(3) : process.argv.slice(2);
 
 const tsxInstall = () => {
   console.log(`缺少 tsx，正在项目目录自动执行 pnpm install: ${packageRoot}`);
-  const installResult = spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["install"], {
+  const installResult = spawnSync("pnpm", ["install"], {
     cwd: packageRoot,
     stdio: "inherit",
-    shell: false,
+    shell: process.platform === "win32",
     windowsHide: true,
   });
   if (installResult.error) {
@@ -43,20 +45,6 @@ const tsxInstall = () => {
     process.exit(installResult.status);
   }
 };
-
-if (!tsx) {
-  tsxInstall();
-  tsx = tsxResolve();
-}
-
-if (!tsx) {
-  console.error([
-    "自动安装后仍缺少 tsx，无法运行 TypeScript 入口。",
-    `项目目录: ${packageRoot}`,
-    "如果仍然失败，请确认 package.json 的 dependencies 中包含 tsx。",
-  ].join("\n"));
-  process.exit(1);
-}
 
 const pathNormalize = (pathValue) => pathValue.toLowerCase().replaceAll("\\", "/");
 const nodeEnv = command === "dev"
@@ -163,6 +151,21 @@ if (command === "stop") {
 }
 if (command === "restart") devStop();
 
+let tsx = tsxResolve();
+if (!tsx) {
+  tsxInstall();
+  tsx = tsxResolve();
+}
+
+if (!tsx) {
+  console.error([
+    "自动安装后仍缺少 tsx，无法运行 TypeScript 入口。",
+    `项目目录: ${packageRoot}`,
+    "如果仍然失败，请确认 package.json 的 dependencies 中包含 tsx。",
+  ].join("\n"));
+  process.exit(1);
+}
+
 let isStopping = false;
 const devStopAndExit = (exitCode) => {
   if (isStopping) return;
@@ -192,6 +195,15 @@ const child = spawn(process.execPath, childArgs, {
 if (shouldWatch) {
   process.once("SIGINT", () => devStopAndExit(130));
   process.once("SIGTERM", () => devStopAndExit(143));
+} else {
+  const childStopAndExit = (exitCode, signal) => {
+    if (isStopping) return;
+    isStopping = true;
+    child.once("exit", () => process.exit(exitCode));
+    child.kill(signal);
+  };
+  process.once("SIGINT", () => childStopAndExit(130, "SIGINT"));
+  process.once("SIGTERM", () => childStopAndExit(143, "SIGTERM"));
 }
 
 child.once("error", (error) => {

@@ -7,15 +7,15 @@
 
 使用方式
 ```bash
-pnpm dlx github:see7788/codexhono dev
-pnpm dlx github:see7788/codexhono stop
-pnpm dlx github:see7788/codexhono restart
+pnpm dlx github:see7788/extends-codex dev
+pnpm dlx github:see7788/extends-codex stop
+pnpm dlx github:see7788/extends-codex restart
 ```
 建议与项目的dev命令合并
 
 ## 源码说明
 
-codexhono 是主要开发区，libs 是复用库。
+extends-codex 是主要开发区，libs 是复用库。
 项目边界：
 - 这不是 AGENTS 项目，因为 AGENTS.md 只给 Codex 加规则，不是运行时接口。
 - 这不是 Skill 项目，因为 Skill 只给 Codex 加能力说明或工作流，不是事件流。
@@ -41,36 +41,107 @@ codexhono 是主要开发区，libs 是复用库。
 
 ## 项目结构
 ```txt
-codexhono/
+extends-codex/
 ├─ bin/
-│  └─ codexhono.js           # CLI 包装入口，负责把命令转发到实际启动逻辑
+│  └─ extends-codex.js                         # CLI 包装入口
+│     ├─ extends-codex dev                     # watch 模式启动 Hono 服务
+│     ├─ extends-codex start                   # 普通模式启动 Hono 服务
+│     ├─ extends-codex stop                    # 停止当前项目的 extends-codex 进程
+│     └─ extends-codex restart                 # 先停止旧进程，再以 watch 模式重启
 ├─ honoapp/
 │  ├─ src/
-│  │  ├─ index.ts            # 服务启动入口
-│  │  ├─ routers.ts          # 路由定义
-│  │  ├─ runtime.ts          # 运行时初始化
-│  │  ├─ store.ts            # 状态管理
-│  │  ├─ chat/               # 聊天相关能力
-│  │  ├─ email/              # 邮件相关能力
-│  │  ├─ file/               # 文件相关能力
-│  │  ├─ sse/                # SSE 流式通信
-│  │  └─ tpl/                # 模板与素材
+│  │  ├─ index.ts                          # 服务启动入口
+│  │  │  └─ runtime.init(routers)          # 启动 Hono，并在启动后物化 .codex 模板
+│  │  ├─ runtime.ts                        # 本地运行时边界
+│  │  │  ├─ init(routers)                  # 选择局域网地址、递增可用端口并启动服务
+│  │  │  ├─ ORIGIN                         # 暴露页面和 API 访问地址
+│  │  │  ├─ HOOK_USER_COMMAND              # 生成 Codex 用户输入 hook 命令
+│  │  │  └─ HOOK_ASSISTANT_COMMAND         # 生成 Codex 助手回复 hook 命令
+│  │  ├─ routers.ts                        # 服务端路由汇总
+│  │  │  ├─ /chat                          # 挂载聊天与模型代理接口
+│  │  │  ├─ /tpl                           # 挂载 Codex 模板管理接口
+│  │  │  ├─ /sse 与 /ssepush               # 挂载 hook 消息推送和页面订阅接口
+│  │  │  ├─ /email                         # 挂载邮件采集接口
+│  │  │  ├─ /file                          # 挂载文件树与代码关系接口
+│  │  │  └─ reactapp                       # 托管前端 Vite 应用
+│  │  ├─ store.ts                          # 服务端 zustand 仓库组合
+│  │  │  ├─ createChatStore                # 提供聊天配置、模型调用和 Codex CLI 代理能力
+│  │  │  └─ createTplStore                 # 提供 .codex 模板读写和物化能力
+│  │  ├─ chat/
+│  │  │  ├─ index.ts                       # /chat Hono API
+│  │  │  │  ├─ GET/POST /chat/state        # 读取或保存聊天配置
+│  │  │  │  ├─ GET/POST /chat/llm/openai   # 读取 OpenAI 兼容配置并发起流式对话
+│  │  │  │  ├─ POST /chat/llm/openai/test  # 用指定 baseURL/model 测试 OpenAI 兼容模型
+│  │  │  │  ├─ GET/POST /chat/llm/anthropic # 读取 Anthropic 配置并发起对话
+│  │  │  │  ├─ POST /chat/llm/anthropic/test # 用指定 baseURL/model 测试 Anthropic 模型
+│  │  │  │  └─ GET/POST /chat/agent/codexcli # 读取 Codex CLI 配置并发起代理任务
+│  │  │  └─ store.ts                       # chatActions 业务能力
+│  │  │     ├─ llm.openai.defChat/test     # 提供 OpenAI 兼容流式调用
+│  │  │     ├─ llm.anthropic.defChat/test  # 提供 Anthropic 消息调用
+│  │  │     └─ agent.codexcli.defChat      # 提供 Codex SDK 线程执行能力
+│  │  ├─ tpl/
+│  │  │  ├─ index.ts                       # /tpl Hono API
+│  │  │  │  ├─ GET/POST /tpl/source        # 读取或保存 source.ts 中的模板源码
+│  │  │  │  ├─ PUT/DELETE /tpl/agentsMd    # 写入或删除 .codex/AGENTS.md
+│  │  │  │  ├─ GET/PUT/DELETE /tpl/configToml # 读取、写入或删除 .codex/config.toml
+│  │  │  │  └─ PUT/DELETE /tpl/skills/:dir # 写入或删除 .codex/skills/:dir/SKILL.md
+│  │  │  ├─ store.ts                       # tplActions 模板能力
+│  │  │  │  ├─ sourceRead/sourceChange     # 提供模板源码读取、解析和保存
+│  │  │  │  ├─ codexTplMaterialize         # 根据模板生成 .codex 目标文件
+│  │  │  │  └─ agentsMd/configToml/skill   # 提供目标文件写入和删除能力
+│  │  │  └─ source.ts                      # AGENTS、config.toml 和 skills 的模板源
+│  │  ├─ sse/
+│  │  │  ├─ index.ts                       # SSE 推送 API
+│  │  │  │  ├─ GET /sse/events             # 提供页面订阅的事件流
+│  │  │  │  ├─ POST /ssepush               # 接收 hook 或页面推送并广播
+│  │  │  │  └─ sseSend(message)            # 向所有 SSE 连接广播消息
+│  │  │  └─ hookReceive.ts                 # Codex hook 命令入口
+│  │  │     └─ hook user|assistant         # 消费 Codex hook stdin，并转发到 /ssepush
+│  │  ├─ file/
+│  │  │  └─ index.ts                       # /file Hono API
+│  │  │     └─ GET /file?path=...          # 提供目录、文件符号和调用关系树节点
+│  │  └─ email/
+│  │     └─ index.ts                       # /email Hono API
+│  │        ├─ GET /email/accounts         # 提供可采集邮箱账号列表
+│  │        └─ POST /email/collect         # 连接 IMAP 并返回邮件正文和附件元信息
 │  └─ scrpits/
-│     └─ vscode.ts           # VS Code 相关脚本入口
+│     └─ vscode.ts                         # VS Code 扩展入口
 ├─ preloads/
-│  └─ webcodex/              # 预加载脚本
+│  └─ webcodex/
+│     └─ src/doubaoAsk.ts                  # 预加载侧豆包提问脚本
 ├─ reactapp/
 │  ├─ src/
-│  │  ├─ App.tsx             # 页面主入口
-│  │  ├─ main.tsx            # 前端启动入口
-│  │  ├─ store.ts            # 前端状态
-│  │  ├─ chat/               # 前端聊天模块
-│  │  ├─ email/              # 前端邮件模块
-│  │  ├─ file/               # 前端文件模块
-│  │  ├─ sse/                # 前端 SSE 模块
-│  │  └─ tpl/                # 前端模板模块
-│  └─ vite.config.ts         # Vite 配置
-├─ package.json
-├─ pnpm-workspace.yaml
-└─ tsconfig.json
+│  │  ├─ App.tsx                           # 前端路由入口
+│  │  │  ├─ /file                          # 文件树和代码关系页面
+│  │  │  ├─ /sse                           # 上下文节点树和 hook 消息页面
+│  │  │  ├─ /chat                          # 模型配置和对话页面
+│  │  │  ├─ /tpl                           # Codex 模板编辑和预览页面
+│  │  │  └─ /email                         # 邮件采集页面
+│  │  ├─ store.ts                          # 前端持久化仓库组合
+│  │  │  ├─ createFile                     # 消费 /file，提供文件树加载状态
+│  │  │  ├─ createSse                      # 消费 /chat 和 /sse，提供节点树编辑和 AI 对话状态
+│  │  │  └─ createTpl                      # 消费 /tpl，提供模板编辑、保存和目标文件发布状态
+│  │  ├─ file/
+│  │  │  ├─ index.tsx                      # 文件树页面
+│  │  │  └─ store.ts                       # fileActions
+│  │  │     ├─ treeOpen                    # 消费 GET /file，打开项目根节点
+│  │  │     └─ nodeLoad                    # 消费 GET /file?path=...，加载目录/符号/调用关系子节点
+│  │  ├─ sse/
+│  │  │  ├─ index.tsx                      # SSE 工作台页面
+│  │  │  └─ store.ts                       # sseActions
+│  │  │     ├─ node.*                      # 提供上下文节点增删改、移动和选中能力
+│  │  │     ├─ nodesLoop                   # 提供从目标节点回溯上下文链路的能力
+│  │  │     ├─ chat                        # 消费 /chat，将节点链路交给模型或 Codex CLI
+│  │  │     └─ hookPushReceive             # 消费 /sse/events，接收 Codex hook 推送
+│  │  ├─ tpl/
+│  │  │  ├─ index.tsx                      # Codex 模板编辑页面
+│  │  │  └─ store.ts                       # tplActions
+│  │  │     ├─ sourceLoad/sourceSave       # 消费 GET/POST /tpl/source
+│  │  │     └─ targetPut/targetDelete      # 消费 /tpl 目标文件接口，发布或删除 .codex 文件
+│  │  ├─ chat/                             # 聊天配置页面
+│  │  └─ email/                            # 邮件采集页面
+│  └─ vite.config.ts                       # 前端构建和开发服务配置
+├─ package.json                            # 包入口和 extends-codex bin 声明
+├─ pnpm-workspace.yaml                     # 工作区包声明
+└─ tsconfig.json                           # 根 TypeScript 工程引用
 ```
