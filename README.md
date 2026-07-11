@@ -55,6 +55,8 @@ extends-codex/
 │       │   └── hookReceive.ts             # Codex hook stdin 转发入口
 │       ├── tpl/
 │       │   ├── source.ts                 # `.codex` 规则、配置和 skills 的模板源
+│       │   │   ├── scope-style           # 统一抽象准入与归一化放置规则
+│       │   │   └── checklist-style       # 验收新增定义和对象边界
 │       │   ├── usercodex.ts              # 用户级 Codex 配置增量同步
 │       │   │   └── default()             # 合并 shell 环境排除项并保留其他配置
 │       │   ├── store.ts                  # 模板解析、保存与目标文件物化
@@ -108,3 +110,6 @@ pnpm build:vscode
 `pnpm docs:check` 会在 package、进程/路由入口或模板源变化时要求 README 或 `docs/` 同步变化，作为语义 checklist 之外的机械门禁。
 
 `.codex` 是运行时生成产物；规则、配置或 skill 的长期修改应落在 `honoapp/src/tpl/source.ts` 模板源中。
+模板只在存在多个真实消费点，或定义自身维护独立状态、生命周期、不变量时允许抽象；其他单点定义必须内联到真实消费处，移动可见性、文件或目录不视为复用。
+项目自定义函数、方法、构造器和 store action 出现两个及以上业务形参时统一使用一个对象形参，并优先内联其类型；框架和第三方固定回调签名不受此约束。
+`pnpm-workspace.yaml` 启用 `injectWorkspacePackages`，使跨目录工作区库在当前消费项目的依赖上下文中解析 Hono、Zustand、Immer 等框架，避免源码软链接复用其他工作区 `node_modules` 后产生同名类型不兼容。
