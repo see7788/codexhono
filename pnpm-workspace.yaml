@@ -3,6 +3,7 @@ packages:
   - "reactapp"
   - "preloads/*"
   - "../extends-vite"
+  - "../extends-ssh"
   - "../extends-antd"
   - "../extends-zustand"
   - "../extends-hono"

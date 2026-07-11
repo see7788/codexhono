@@ -1,0 +1,20 @@
+[features]
+hooks = true
+
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = ["chrome-devtools-mcp@latest"]
+
+[mcp_servers.codegraph]
+command = "npx"
+args = ["@colbymchenry/codegraph","serve","--mcp"]
+
+[mcp_servers.node_repl]
+command = "node_repl"
+args = []
+
+[[hooks.UserPromptSubmit]]
+hooks = [{ type = "command", command = "node \"F:/pro/extends-codex/honoapp/node_modules/tsx/dist/cli.mjs\" \"F:/pro/extends-codex/honoapp/src/sse/hookReceive.ts\" hook \"F:/pro/extends-codex/.codex\" \"F:/pro/extends-codex/honoapp\" \"192.168.110.126\" 3001 user", timeout = 10 }]
+
+[[hooks.Stop]]
+hooks = [{ type = "command", command = "node \"F:/pro/extends-codex/honoapp/node_modules/tsx/dist/cli.mjs\" \"F:/pro/extends-codex/honoapp/src/sse/hookReceive.ts\" hook \"F:/pro/extends-codex/.codex\" \"F:/pro/extends-codex/honoapp\" \"192.168.110.126\" 3001 assistant", timeout = 10 }]

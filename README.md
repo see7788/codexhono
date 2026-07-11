@@ -1,147 +1,110 @@
+# extends-codex
+
+extends-codex 是运行在 Codex CLI 旁边的本地上下文工作台。它通过 Codex hooks 捕获用户输入和助手回复，由 Hono 服务将事件流推送到 React 页面；页面还可以整理上下文节点、查看 TypeScript 文件与调用关系、调用 Codex CLI 或兼容模型，并维护项目的 `.codex/AGENTS.md`、`config.toml` 和 skills。适合需要检查、裁剪、重放 Codex 上下文，或集中维护项目级 Codex 配置的场景。
+
 ## 快速使用
 
-前置条件：
-- 已安装 Node.js 和 pnpm
-- 已安装并配置好 Codex CLI
-- 已安装 tsx 依赖
+需要 Node.js、pnpm 和已完成登录配置的 Codex CLI。在目标项目根目录运行：
 
-使用方式
 ```bash
 pnpm dlx github:see7788/extends-codex dev
+```
+
+服务会监听局域网地址，从 `3000` 开始选择可用端口，在终端输出 Web 地址，并将当前项目的 `.codex` 模板物化到磁盘。`dev` 使用 watch 模式；其他进程命令如下：
+
+```bash
+pnpm dlx github:see7788/extends-codex start
 pnpm dlx github:see7788/extends-codex stop
 pnpm dlx github:see7788/extends-codex restart
 ```
-建议与项目的dev命令合并
 
-## 源码说明
+长期使用时，建议把命令并入目标项目根 `package.json` 的 `dev` script，例如：
 
-extends-codex 是主要开发区，libs 是复用库。
-项目边界：
-- 这不是 AGENTS 项目，因为 AGENTS.md 只给 Codex 加规则，不是运行时接口。
-- 这不是 Skill 项目，因为 Skill 只给 Codex 加能力说明或工作流，不是事件流。
-- 这不是 MCP 项目，因为 MCP 主要让 Codex 调用外部工具，不能让 Codex 把自身消息主动推给 MCP server。
-- 这不是 Codex Plugin 项目，因为 Plugin 主要打包分发 hooks、skills、MCP 等配置，不是新的推送通道。
-- 这是 Codex hook companion，因为它依赖 Codex hooks 捕获事件，再交给本地 Hono 服务处理。
-- 这是 Codex 下游能力，可以使用上游 Codex 生态和 ChatGPT 生态。
-
-项目定位：
-- HonoCodex 是一个 Codex 上下文对象化工作台。
-- 它把零散的上下文片段、规则文件、工具说明、文件匹配规则和运行配置，整理成可视化、可维护、可重放的上下文对象。
-- 它的出发点是：OpenAI 和 Codex 生态里已经有很多官方概念、能力入口和配置文件，例如 AGENTS、Skills、MCP、hooks、plugins、CLI 参数、glob 文件匹配规则和不同层级的配置，但这些东西各自解决一小段问题，组合起来之后上下文从哪里来、如何进入模型、当前到底带了什么内容，都不够直观。
-- 很多具体名称本质上都在处理上下文：规则文件决定长期指令，Skills 描述能力和流程，MCP 暴露外部工具和资源，hooks 捕获事件流，plugins 打包分发配置，glob 决定哪些文件进入候选范围，CLI 参数和配置文件决定本次运行环境。
-- 现有方式的另一个缺点是可视化很弱。上下文经常散落在对话历史、规则文件、工具说明、资源列表、文件匹配规则、hook 事件、命令参数和临时输入里，用户很难像检查函数入参一样检查一次 AI 调用的完整输入。
-- HonoCodex 解决的问题是：Codex UI 的对话历史会越积越长，任务边界容易变模糊，用户很难精确控制本次调用到底带了哪些上下文，也很难把同一组上下文反复调整、重放和比较。
-- 它的用途是：用 Web 页面先整理出一组简短、明确、可检查的上下文对象数组，再把这组上下文作为一次独立任务交给 Codex CLI 执行，并把执行结果流式返回页面。
-- 它同时通过 Codex hooks 观察当前 Codex 会话，把 Codex 输入框里的用户输入和 AI 回复广播给本地 Hono 服务，再由页面缓存后显示。
-- 简单说，这个项目不是让 Codex 变成另一个模型，而是在 Codex 外面加一层本地 Web 工作台，把零零散散的上下文片段和配置变成可视化、可维护的对象，再用这些对象驱动一次次 AI 调用。
-
-核心设计：
-- 一次 AI 调用被看作一次函数调用：上下文对象数组是入参，Codex CLI 是执行器，流式回复是返回值，hook 事件是旁路观察日志。
-- Web 页面是上下文编辑器，负责收集、裁剪、排序和展示上下文。会话从叶子节点多方式发起。
+```json
+{
+  "scripts": {
+    "dev": "extends-codex dev"
+  }
+}
+```
 
 ## 项目结构
-```txt
+
+```text
 extends-codex/
-├─ bin/
-│  └─ extends-codex.js                         # CLI 包装入口
-│     ├─ extends-codex dev                     # watch 模式启动 Hono 服务
-│     ├─ extends-codex start                   # 普通模式启动 Hono 服务
-│     ├─ extends-codex stop                    # 停止当前项目的 extends-codex 进程
-│     └─ extends-codex restart                 # 先停止旧进程，再以 watch 模式重启
-├─ honoapp/
-│  ├─ src/
-│  │  ├─ index.ts                          # 服务启动入口
-│  │  │  └─ runtime.init(routers)          # 启动 Hono，并在启动后物化 .codex 模板
-│  │  ├─ runtime.ts                        # 本地运行时边界
-│  │  │  ├─ init(routers)                  # 选择局域网地址、递增可用端口并启动服务
-│  │  │  ├─ ORIGIN                         # 暴露页面和 API 访问地址
-│  │  │  ├─ HOOK_USER_COMMAND              # 生成 Codex 用户输入 hook 命令
-│  │  │  └─ HOOK_ASSISTANT_COMMAND         # 生成 Codex 助手回复 hook 命令
-│  │  ├─ routers.ts                        # 服务端路由汇总
-│  │  │  ├─ /chat                          # 挂载聊天与模型代理接口
-│  │  │  ├─ /tpl                           # 挂载 Codex 模板管理接口
-│  │  │  ├─ /sse 与 /ssepush               # 挂载 hook 消息推送和页面订阅接口
-│  │  │  ├─ /email                         # 挂载邮件采集接口
-│  │  │  ├─ /file                          # 挂载文件树与代码关系接口
-│  │  │  └─ reactapp                       # 托管前端 Vite 应用
-│  │  ├─ store.ts                          # 服务端 zustand 仓库组合
-│  │  │  ├─ createChatStore                # 提供聊天配置、模型调用和 Codex CLI 代理能力
-│  │  │  └─ createTplStore                 # 提供 .codex 模板读写和物化能力
-│  │  ├─ chat/
-│  │  │  ├─ index.ts                       # /chat Hono API
-│  │  │  │  ├─ GET/POST /chat/state        # 读取或保存聊天配置
-│  │  │  │  ├─ GET/POST /chat/llm/openai   # 读取 OpenAI 兼容配置并发起流式对话
-│  │  │  │  ├─ POST /chat/llm/openai/test  # 用指定 baseURL/model 测试 OpenAI 兼容模型
-│  │  │  │  ├─ GET/POST /chat/llm/anthropic # 读取 Anthropic 配置并发起对话
-│  │  │  │  ├─ POST /chat/llm/anthropic/test # 用指定 baseURL/model 测试 Anthropic 模型
-│  │  │  │  └─ GET/POST /chat/agent/codexcli # 读取 Codex CLI 配置并发起代理任务
-│  │  │  └─ store.ts                       # chatActions 业务能力
-│  │  │     ├─ llm.openai.defChat/test     # 提供 OpenAI 兼容流式调用
-│  │  │     ├─ llm.anthropic.defChat/test  # 提供 Anthropic 消息调用
-│  │  │     └─ agent.codexcli.defChat      # 提供 Codex SDK 线程执行能力
-│  │  ├─ tpl/
-│  │  │  ├─ index.ts                       # /tpl Hono API
-│  │  │  │  ├─ GET/POST /tpl/source        # 读取或保存 source.ts 中的模板源码
-│  │  │  │  ├─ PUT/DELETE /tpl/agentsMd    # 写入或删除 .codex/AGENTS.md
-│  │  │  │  ├─ GET/PUT/DELETE /tpl/configToml # 读取、写入或删除 .codex/config.toml
-│  │  │  │  └─ PUT/DELETE /tpl/skills/:dir # 写入或删除 .codex/skills/:dir/SKILL.md
-│  │  │  ├─ store.ts                       # tplActions 模板能力
-│  │  │  │  ├─ sourceRead/sourceChange     # 提供模板源码读取、解析和保存
-│  │  │  │  ├─ codexTplMaterialize         # 根据模板生成 .codex 目标文件
-│  │  │  │  └─ agentsMd/configToml/skill   # 提供目标文件写入和删除能力
-│  │  │  └─ source.ts                      # AGENTS、config.toml 和 skills 的模板源
-│  │  ├─ sse/
-│  │  │  ├─ index.ts                       # SSE 推送 API
-│  │  │  │  ├─ GET /sse/events             # 提供页面订阅的事件流
-│  │  │  │  ├─ POST /ssepush               # 接收 hook 或页面推送并广播
-│  │  │  │  └─ sseSend(message)            # 向所有 SSE 连接广播消息
-│  │  │  └─ hookReceive.ts                 # Codex hook 命令入口
-│  │  │     └─ hook user|assistant         # 消费 Codex hook stdin，并转发到 /ssepush
-│  │  ├─ file/
-│  │  │  └─ index.ts                       # /file Hono API
-│  │  │     └─ GET /file?path=...          # 提供目录、文件符号和调用关系树节点
-│  │  └─ email/
-│  │     └─ index.ts                       # /email Hono API
-│  │        ├─ GET /email/accounts         # 提供可采集邮箱账号列表
-│  │        └─ POST /email/collect         # 连接 IMAP 并返回邮件正文和附件元信息
-│  └─ scrpits/
-│     └─ vscode.ts                         # VS Code 扩展入口
-├─ preloads/
-│  └─ webcodex/
-│     └─ src/doubaoAsk.ts                  # 预加载侧豆包提问脚本
-├─ reactapp/
-│  ├─ src/
-│  │  ├─ App.tsx                           # 前端路由入口
-│  │  │  ├─ /file                          # 文件树和代码关系页面
-│  │  │  ├─ /sse                           # 上下文节点树和 hook 消息页面
-│  │  │  ├─ /chat                          # 模型配置和对话页面
-│  │  │  ├─ /tpl                           # Codex 模板编辑和预览页面
-│  │  │  └─ /email                         # 邮件采集页面
-│  │  ├─ store.ts                          # 前端持久化仓库组合
-│  │  │  ├─ createFile                     # 消费 /file，提供文件树加载状态
-│  │  │  ├─ createSse                      # 消费 /chat 和 /sse，提供节点树编辑和 AI 对话状态
-│  │  │  └─ createTpl                      # 消费 /tpl，提供模板编辑、保存和目标文件发布状态
-│  │  ├─ file/
-│  │  │  ├─ index.tsx                      # 文件树页面
-│  │  │  └─ store.ts                       # fileActions
-│  │  │     ├─ treeOpen                    # 消费 GET /file，打开项目根节点
-│  │  │     └─ nodeLoad                    # 消费 GET /file?path=...，加载目录/符号/调用关系子节点
-│  │  ├─ sse/
-│  │  │  ├─ index.tsx                      # SSE 工作台页面
-│  │  │  └─ store.ts                       # sseActions
-│  │  │     ├─ node.*                      # 提供上下文节点增删改、移动和选中能力
-│  │  │     ├─ nodesLoop                   # 提供从目标节点回溯上下文链路的能力
-│  │  │     ├─ chat                        # 消费 /chat，将节点链路交给模型或 Codex CLI
-│  │  │     └─ hookPushReceive             # 消费 /sse/events，接收 Codex hook 推送
-│  │  ├─ tpl/
-│  │  │  ├─ index.tsx                      # Codex 模板编辑页面
-│  │  │  └─ store.ts                       # tplActions
-│  │  │     ├─ sourceLoad/sourceSave       # 消费 GET/POST /tpl/source
-│  │  │     └─ targetPut/targetDelete      # 消费 /tpl 目标文件接口，发布或删除 .codex 文件
-│  │  ├─ chat/                             # 聊天配置页面
-│  │  └─ email/                            # 邮件采集页面
-│  └─ vite.config.ts                       # 前端构建和开发服务配置
-├─ package.json                            # 包入口和 extends-codex bin 声明
-├─ pnpm-workspace.yaml                     # 工作区包声明
-└─ tsconfig.json                           # 根 TypeScript 工程引用
+├── honoapp/
+│   └── src/
+│       ├── index.ts                      # 服务入口，只负责启动和模板物化
+│       ├── runtime.ts                    # 工作区与服务运行时
+│       │   ├── init()                    # 选择局域网地址和可用端口并启动 Hono
+│       │   └── HOOK_*_COMMAND            # 生成用户输入与助手回复 hook 命令
+│       ├── routers.ts                    # Hono 路由汇总与 React 应用托管
+│       ├── chat/
+│       │   ├── index.ts                  # /chat 模型与代理接口
+│       │   │   ├── /state                # 读取和保存模型配置
+│       │   │   ├── /llm/*                # 调用或测试 OpenAI、Anthropic 兼容模型
+│       │   │   └── /agent/codexcli       # 将上下文任务交给 Codex CLI
+│       │   └── store.ts                  # 模型配置、流式调用与 Codex 线程执行
+│       ├── file/
+│       │   └── index.ts                  # /file 文件与代码关系接口
+│       │       └── GET /file             # 按需返回目录、符号、callers 和 callees
+│       ├── sse/
+│       │   ├── index.ts                  # hook 事件广播接口
+│       │   │   ├── GET /sse/events       # 页面订阅事件流
+│       │   │   └── POST /ssepush         # 接收 hook 消息并广播
+│       │   └── hookReceive.ts             # Codex hook stdin 转发入口
+│       ├── tpl/
+│       │   ├── source.ts                 # `.codex` 规则、配置和 skills 的模板源
+│       │   ├── usercodex.ts              # 用户级 Codex 配置增量同步
+│       │   │   └── default()             # 合并 shell 环境排除项并保留其他配置
+│       │   ├── store.ts                  # 模板解析、保存与目标文件物化
+│       │   └── index.ts                  # /tpl 模板管理接口
+│       │       ├── /source                # 读取和更新模板源码
+│       │       └── /agentsMd|configToml|skills/* # 发布或删除 `.codex` 目标
+│       └── email/
+│           └── index.ts                  # /email IMAP 邮件采集接口
+│               ├── GET /accounts         # 返回可采集账号
+│               └── POST /collect         # 返回邮件正文与附件元信息
+├── reactapp/
+│   └── src/
+│       ├── App.tsx                       # Web 页面入口
+│       │   ├── /file                     # 文件、符号和调用关系树
+│       │   ├── /sse                      # 上下文节点树与 hook 消息工作台
+│       │   ├── /chat                     # 模型配置与测试
+│       │   ├── /tpl                      # `.codex` 模板编辑与发布
+│       │   └── /email                    # 邮件采集
+│       ├── store.ts                      # 前端 zustand 切片组合
+│       ├── file/store.ts                 # 文件树按需加载
+│       ├── sse/store.ts                  # 上下文编辑、调用与事件接收
+│       └── tpl/store.ts                  # 模板加载、保存与目标发布
+├── preloads/
+│   └── webcodex/src/doubaoAsk.ts         # Web 预加载侧豆包提问能力
+├── package.json                          # extends-codex bin 与根开发命令
+└── pnpm-workspace.yaml                   # 本仓库及 extends-* 复用包工作区
 ```
+
+`package.json` 的 `bin` 字段与 `bin/<command>.js|mjs` wrapper 不属于本仓库手写源码，两者由外部 `create-todo-cli nodeScript/nodePackageBinInit` 同步生成。该命令会交互确认命令名和真实源码入口，同时更新 `bin`、`files`、`tsx` 运行依赖，生成负责 `dev/start/stop/restart` 的 wrapper，并执行 `pnpm install` 与 `pnpm link`。检查发布入口时必须把这两个生成结果作为同一组产物核对，不能把 `files` 中的 `bin/` 当成 npm `bin` 声明，也不能仅凭生成产物暂时不存在判定源码入口丢失。
+
+## 运行链路
+
+1. `extends-codex dev` 通过 tsx watch 启动 `honoapp/src/index.ts`。
+2. 入口先向用户级 Codex 配置增量合并 shell 环境排除项，再由 Hono 运行时定位执行命令所在工作区，创建 `.codex`、`.zustand`，并将项目模板中的运行地址和 hook 命令渲染为真实值。
+3. Codex 的 `UserPromptSubmit` 和 `Stop` hooks 将消息发送到 `/ssepush`，页面通过 `/sse/events` 实时接收。
+4. 页面整理出的上下文可以发送给已配置模型，或作为独立任务交给 Codex CLI，并流式显示返回内容。
+
+## 开发
+
+仓库使用 pnpm workspace，并依赖同级的 `extends-hono`、`extends-vite`、`extends-ssh`、`extends-zustand` 和 `extends-antd` 工作区；其中 `extends-ssh` 是 `extends-vite` 的 `workspace:*` 依赖，必须加入同一个根 workspace 才能完成安装。安装依赖后可运行：
+
+```bash
+pnpm install
+pnpm dev
+pnpm docs:check
+pnpm typecheck
+pnpm build:vscode
+```
+
+本仓库的 `pnpm dev` 通过 tsx watch 直接运行 `honoapp/src/index.ts`；上面的 `pnpm dlx github:see7788/extends-codex dev` 是其他项目使用已发布 CLI 的方式，两者不是同一个入口。
+`pnpm docs:check` 会在 package、进程/路由入口或模板源变化时要求 README 或 `docs/` 同步变化，作为语义 checklist 之外的机械门禁。
+
+`.codex` 是运行时生成产物；规则、配置或 skill 的长期修改应落在 `honoapp/src/tpl/source.ts` 模板源中。

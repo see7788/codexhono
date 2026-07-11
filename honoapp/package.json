@@ -3,10 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "build:vscode": "tsup scrpits/vscode.ts --format esm --platform node --target node20 --splitting false --no-sourcemap --no-dts --external vscode --out-dir scrpits",
-    "typecheck": "tsc --noEmit"
-  },
   "dependencies": {
     "@hono/node-server": "^1.19.11",
     "@hono/node-ws": "^1.3.1",
@@ -35,8 +31,5 @@
   "files": [
     "bin/",
     "src/"
-  ],
-  "bin": {
-    "honoapp": "./bin/honoapp.js"
-  }
+  ]
 }
