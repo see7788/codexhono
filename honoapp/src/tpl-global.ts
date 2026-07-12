@@ -1,57 +1,8 @@
-import { z } from "zod";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import type { tplGlobal_t } from "./tpl/source";
 
-const mcpServerSchema = z.object({
-  args: z.array(z.string()).optional(),
-  command: z.string().min(1),
-}).strict();
-const markdownCodeSchema = z.object({
-  language: z.string().min(1),
-  content: z.string().min(1),
-});
-const sectionBaseSchema = z.object({
-  title: z.string().min(1).optional(),
-  text: z.string().min(1).optional(),
-  items: z.array(z.string().min(1)).optional(),
-  orderedItems: z.array(z.string().min(1)).optional(),
-  code: markdownCodeSchema.optional(),
-});
-const sectionContentRefine = (section: z.infer<typeof sectionBaseSchema>, ctx: z.RefinementCtx) => {
-  if (!section.text && !section.items?.length && !section.orderedItems?.length && !section.code) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "section must contain text, items, orderedItems, or code",
-    });
-  }
-};
-const sectionSchema = sectionBaseSchema.superRefine(sectionContentRefine);
-const skillSchema = z.object({
-  description: z.string().min(1),
-  title: z.string().min(1),
-  intro: z.string().min(1).optional(),
-  sections: z.array(sectionBaseSchema.extend({
-    title: z.string().min(1),
-  }).superRefine(sectionContentRefine)).min(1),
-});
-const tplGlobalSchema = z.object({
-  nodes: z.record(z.string().min(1), z.union([z.string().min(1), z.number().finite()])),
-  agentsMd: z.object({
-    sections: z.array(sectionSchema).min(1),
-  }),
-  configToml: z.object({
-    developerInstructions: z.array(z.string().min(1)).min(1).optional(),
-    mcpServers: z.record(z.string().min(1), mcpServerSchema).optional(),
-    shellEnvironmentPolicy: z.object({
-      inherit: z.literal("all"),
-      exclude: z.array(z.string().min(1)).min(1),
-    }),
-  }),
-  skills: z.record(
-    z.string().min(1).regex(/^[^/\\]+$/),
-    skillSchema),
-});
 const nodes = {
   checklistStyle: "checklist-styleskill",
   codebaseMcpStyle: "codebase-mcp-styleskill",
@@ -62,7 +13,7 @@ const nodes = {
   variableStyle: "variable-styleskill",
   zustandStoreStyle: "zustand-store-styleskill",
 } as const
-const source = tplGlobalSchema.parse({
+const source: tplGlobal_t = {
   nodes,
   agentsMd: {
     sections: [
@@ -873,7 +824,7 @@ const source = tplGlobalSchema.parse({
       ],
     },
   },
-});
+};
 export default class TplGlobal {
   private readonly source = source;
 

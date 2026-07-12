@@ -40,7 +40,7 @@ extends-codex/
 │       │   └── HOOK_*_COMMAND            # 生成用户输入与助手回复 hook 命令
 │       ├── routers.ts                    # Hono 路由汇总与 React 应用托管
 │       ├── tpl-global.ts                 # PC 用户级 Codex 模板对象，当前仅完成源码迁移
-│       │   ├── source                    # 用户级 AGENTS、MCP、skills 与环境策略
+│       │   ├── source                    # 按 tplGlobal_t 定义用户级 AGENTS、MCP、skills 与环境策略
 │       │   └── sync()                    # 安全合并用户配置；尚未实例化和接入入口
 │       ├── chat/
 │       │   ├── index.ts                  # /chat 模型与代理接口
@@ -58,6 +58,7 @@ extends-codex/
 │       │   └── hookReceive.ts             # Codex hook stdin 转发入口
 │       ├── tpl/
 │       │   ├── source.ts                 # `.codex` 规则、配置和 skills 的模板源
+│       │   │   ├── tplGlobal_t           # 复用公共模板字段并声明用户级 configToml 差异
 │       │   │   ├── scope-style           # 统一抽象、对象边界与 pnpm 公共库冲突处理
 │       │   │   ├── net-style             # 统一网络边界、长任务轮询与限流退避
 │       │   │   └── checklist-style       # 验收对象边界并在连续失败时停止试探

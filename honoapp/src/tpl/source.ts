@@ -76,6 +76,14 @@ export const tplSchema = z.object({
     skillSchema),
 });
 export type Tpl = z.infer<typeof tplSchema>
+export type tplGlobal_t = Omit<Tpl, "configToml"> & {
+  configToml: Omit<Tpl["configToml"], "features" | "hooks"> & {
+    shellEnvironmentPolicy: {
+      inherit: "all",
+      exclude: string[],
+    },
+  },
+}
 const nodes = {
   HOOK_USER_COMMAND: "HOOK_USER_COMMAND",
   HOOK_ASSISTANT_COMMAND: "HOOK_ASSISTANT_COMMAND",
