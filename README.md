@@ -55,7 +55,7 @@ extends-codex/
 │       │   └── hookReceive.ts             # Codex hook stdin 转发入口
 │       ├── tpl/
 │       │   ├── source.ts                 # `.codex` 规则、配置和 skills 的模板源
-│       │   │   ├── scope-style           # 统一抽象准入与归一化放置规则
+│       │   │   ├── scope-style           # 统一抽象、对象边界与 pnpm 公共库冲突处理
 │       │   │   ├── net-style             # 统一网络边界、长任务轮询与限流退避
 │       │   │   └── checklist-style       # 验收对象边界并在连续失败时停止试探
 │       │   ├── usercodex.ts              # 用户级 Codex 配置增量同步
@@ -114,4 +114,5 @@ pnpm build:vscode
 模板只在存在多个真实消费点，或定义自身维护独立状态、生命周期、不变量时允许抽象；其他单点定义必须内联到真实消费处，移动可见性、文件或目录不视为复用。
 项目自定义函数、方法、构造器和 store action 出现两个及以上业务形参时统一使用一个对象形参，并优先内联其类型；框架和第三方固定回调签名不受此约束。
 `pnpm-workspace.yaml` 启用 `injectWorkspacePackages`，使跨目录工作区库在当前消费项目的依赖上下文中解析 Hono、Zustand、Immer 等框架，避免源码软链接复用其他工作区 `node_modules` 后产生同名类型不兼容。
+模板处理公共库冲突时先在消费项目根使用 `pnpm why/list -r` 区分直接依赖、传递依赖和跨 API 的共享框架：跨边界类型由 peerDependencies 与消费项目版本归一，内部依赖允许隔离多版本，传递依赖优先升级上游并只在兼容时 overrides。多个根 workspace 共同消费相邻 `extends-*` 时检查 injection；常规声明一致仍报错才检查实际解析路径，并通过另一消费项目重新 install 后回到原项目 typecheck 的方式验证不会复发。
 真实外部链路按调用、生产者状态、原始响应、本地解析和消费者显示逐层取证；第三方页面结构变化后重新获取 DOM，owner 已有关系不接受消费者恢复参数覆盖。长异步任务使用符合服务时长的轮询与统一限流退避，同一路径连续两次失败后停止试探并回到最早未证实边界。临时诊断必须带退出条件并在事实确认后删除；长任务在真实验证通过且可独立回退的里程碑自动提交 Git，但不自动 push 或打 tag。

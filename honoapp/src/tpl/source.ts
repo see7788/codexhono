@@ -244,7 +244,7 @@ const tpl: Tpl = {
       ],
     },
     [nodes.scopeStyle]: {
-      description: "涉及前端组件作用域、后端业务对象边界、复用归一化、拆分、导出和样式放置时使用。约束最小作用域、真实复用后抽象和前后端边界。",
+      description: "涉及前端组件作用域、后端业务对象边界、复用归一化、拆分、导出、样式放置、公共库依赖或 pnpm workspace 冲突时使用。约束最小作用域、真实复用后抽象、前后端边界与跨工作区依赖来源。",
       title: "作用域风格",
       sections: [
         {
@@ -336,6 +336,39 @@ const tpl: Tpl = {
             "纯数据转换、无状态工具和单点逻辑不要为了面向对象强行造类；只有需要维护状态、不变量或多处行为协作时才使用对象。",
             `对象方法命名使用 ${nodes.variableStyle}。`,
           ],
+        },
+        {
+          title: "pnpm 公共库与传递依赖冲突",
+          items: [
+            "本机 `F:/pro` 下存在多个独立 pnpm 根项目，它们会通过 `../extends-*` 共同消费相邻公共库；同一个公共库可能同时成为多个根 workspace 的成员。出现冲突时先确定当前发生问题的消费项目根，不把公共库目录现有的 node_modules 当作当前项目的可靠依赖环境。",
+            "发现公共库与当前项目发生依赖、版本或类型冲突时，先在消费项目根执行 `pnpm why <包名> -r` 和 `pnpm list <包名> -r`，记录谁直接声明、谁经上游包引入、各处解析版本；禁止先修改业务泛型、复制框架类型或增加类型断言。",
+            "先判断冲突依赖是否穿过公共库边界：公开参数、返回值、实例或导出类型包含 Hono router、Zustand StateCreator、React runtime/type、Vite plugin、TypeScript AST 等框架对象时，库和消费方必须共享兼容的依赖来源。",
+            "穿过公共边界的框架依赖由消费项目决定具体运行版本；公共库使用 peerDependencies 声明兼容范围，并用 devDependencies 支持自身开发和类型检查，消费项目在 dependencies 中提供实际版本。",
+            "完全留在公共库内部、没有类型或实例穿过边界的依赖由库自己的 dependencies 维护；不同库可以使用不同版本，不为了表面统一强制提升为 peer dependency。",
+            "依赖里的依赖发生冲突时，先用 `pnpm why` 找到引入冲突版本的上游包并优先升级或调整上游；只有确认版本范围和运行行为兼容后才允许根项目使用 pnpm overrides 统一版本，版本明确不兼容时禁止强制覆盖。",
+            "多个版本只有在类型、实例、全局状态和 singleton 都不跨包边界时才允许共存；Hono router、Zustand creator、React runtime 等对象跨边界时必须统一依赖来源，不能依靠 adapter、wrapper 或类型断言伪装兼容。",
+            "相邻 `../extends-*` 公共库被多个 pnpm 根项目消费时，每个消费根都要独立检查 `injectWorkspacePackages` 或具体依赖的 injected 配置；配置属于消费项目，不依赖另一个根项目最后一次 pnpm install 碰巧留下的解析环境。",
+            "package.json、lockfile 和 `pnpm why` 看起来一致但 TypeScript 仍报告同名类型不兼容，或错误路径同时出现两个 `F:/pro` 项目的 node_modules 时，才进一步从消费项目和公共库目录分别检查 `require.resolve`、realpath 与实际版本，确认是否仍从其他工作区解析。",
+            "Hono router 不兼容、Zustand persist/immer mutator 不兼容和 setState producer 类型异常可能是同一个依赖来源冲突的不同下游表现；错误路径指向不同根项目时必须先解决依赖来源，禁止逐个修补这些泛型报错。",
+            "禁止把 `as unknown as`、复制 Hono/Zustand 泛型、手改 node_modules、删除公共库 node_modules 或只统一 package.json 版本当作完成；这些操作没有证明消费方和公共库使用了稳定兼容的依赖环境。",
+            "修复后必须从发生问题的消费项目根重新执行 `pnpm install`、`pnpm why/list -r` 和完整 typecheck/build；不能只以安装成功、单包类型检查或 package.json 版本一致判定完成。",
+            "本机公共库修复还必须做交叉工作区复发验证：项目 A 验证通过后，在已纳入本次验证范围且同样消费该库的项目 B 执行 pnpm install，再不重装 A 直接返回运行 A 的 why/list 与完整 typecheck。A 再次失败说明依赖仍受最后安装的工作区影响，应升级为具体依赖 injected、构建产物、本地 tarball 或发布包隔离；未获授权操作项目 B 时必须明确保留该验证项，不能假装不会复发。",
+          ],
+          code: {
+            language: "text",
+            content: [
+              "发现公共库冲突",
+              "-> 在消费项目根运行 pnpm why/list，定位直接依赖和传递依赖",
+              "-> 判断框架类型或实例是否穿过公共 API 边界",
+              "   -> 穿过：peerDependencies + 消费项目具体版本",
+              "   -> 不穿过：保留库内 dependencies，允许隔离多版本",
+              "-> 传递依赖冲突：优先升级上游；确认兼容后才 overrides",
+              "-> 多根 workspace 共同消费 ../extends-*：检查 injectWorkspacePackages / injected",
+              "-> 常规信息一致仍报错：最后检查 require.resolve / realpath / 实际版本",
+              "-> pnpm install -> why/list -> 完整 typecheck/build",
+              "-> 到另一消费项目 install -> 不重装原项目 -> 回归 why/list 与 typecheck",
+            ].join("\n"),
+          },
         },
         {
           title: "导出边界",
