@@ -5,5 +5,5 @@ import routers from "./routers";
 import store from "./store";
 import TplGlobal from "./tpl-global";
 
-new TplGlobal().sync();
+new TplGlobal();
 runtime.init(routers).then(() => store.getState().tplActions.codexTplMaterialize());

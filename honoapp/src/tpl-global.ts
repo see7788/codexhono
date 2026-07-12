@@ -253,6 +253,7 @@ const source: tplGlobal_t = {
           title: "通用作用域",
           items: [
             "任何常量、类型、函数、方法、class、组件、配置、DTO、wrapper、adapter 或文件，只有在存在多个真实消费点，或自身维护独立状态、生命周期、不变量时才允许定义；否则必须内联到真实消费点。改变 private/public、class/file 或目录位置不构成复用。",
+            "无参数 class 的实例创建若同步完成全部工作，且创建后没有独立状态、后续生命周期或第二个真实动作，必须把唯一逻辑直接放进 `constructor`，调用方只写 `new ClassName()`；禁止额外暴露只被构造后立即调用一次的 `sync`、`init`、`run`、`start` 或同义方法。只有异步动作、需要延后触发、存在多个真实调用时机，或实例创建后仍维护状态与生命周期时，才允许保留独立公开方法。",
             "具体实现前先做真实实现前置检查：确认真实输入、真实配置、真实调用路径、真实副作用和真实验证方式；缺任一关键条件时先阻塞并列缺项，不先写象征实现。",
             "真实实现：用户要求具体实现时，必须接入真实调用路径、真实配置、真实文件、真实命令或真实接口；禁止用 mock、stub、dummy、示例数据、空方法、只改状态的象征实现冒充完成。",
             "涉及真实外部系统的完整链路，必须按最早可观察边界逐级取证：调用入口 -> 操作实际提交 -> 生产者状态变化 -> 异步任务开始或结束 -> 原始响应 -> 本项目解析或持久化 -> 消费者显示；前一层未证实时，禁止修改后一层。",
@@ -709,6 +710,7 @@ const source: tplGlobal_t = {
           title: "抽象准入验收",
           items: [
             "逐个检查本轮新增定义；不能指出多个真实消费点，也不能说明其维护的独立状态、生命周期或不变量时，必须删除该定义并内联到真实消费点。",
+            "逐个检查无参数 class 的创建语句；出现 `new X().sync()`、`new X().init()`、`new X().run()`、`new X().start()` 或先实例化后立即单次调用同义方法时，若该动作同步且实例没有后续状态或生命周期，必须把动作并入构造函数并将调用归一为 `new X()`。",
           ],
         },
         {
@@ -884,7 +886,7 @@ const source: tplGlobal_t = {
   },
 };
 export default class TplGlobal {
-  sync() {
+  constructor() {
     const codexPath = join(homedir(), ".codex");
     const agentsPath = join(codexPath, "AGENTS.md");
     const agentsCurrent = existsSync(agentsPath) ? readFileSync(agentsPath, "utf8") : "";

@@ -112,6 +112,7 @@ pnpm build:vscode
 
 `.codex` 是运行时生成产物；PC 用户级 AGENTS、MCP 与 skills 的长期规则只维护在 `honoapp/src/tpl-global.ts`，项目级 `honoapp/src/tpl/source.ts` 只维护 hooks 与 Electron 环境策略。
 模板只在存在多个真实消费点，或定义自身维护独立状态、生命周期、不变量时允许抽象；其他单点定义必须内联到真实消费处，移动可见性、文件或目录不视为复用。
+无参数 class 若在创建时同步完成唯一动作，且实例不维护后续状态或生命周期，必须把动作放进构造函数并直接 `new ClassName()`；禁止再暴露只被立即调用一次的 `sync`、`init`、`run` 或 `start`。
 项目自定义函数、方法、构造器和 store action 出现两个及以上业务形参时统一使用一个对象形参，并优先内联其类型；框架和第三方固定回调签名不受此约束。
 `extends-*` 被视为用户个人长期维护的独立工具库。当前项目调用不满足其既有公开能力时，模板要求返回 `Library Boundary Decision Required` 并停止写入；未经用户选择，不得在工具库或消费项目新增文件、接口、适配层，不得修改接口参数或业务逻辑，只能先提供“新增能力”与“修改既有能力”的兼容性和影响分析供用户决策。
 `pnpm-workspace.yaml` 启用 `injectWorkspacePackages`，使跨目录工作区库在当前消费项目的依赖上下文中解析 Hono、Zustand、Immer 等框架，避免源码软链接复用其他工作区 `node_modules` 后产生同名类型不兼容。
