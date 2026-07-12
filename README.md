@@ -39,6 +39,9 @@ extends-codex/
 │       │   ├── init()                    # 选择局域网地址和可用端口并启动 Hono
 │       │   └── HOOK_*_COMMAND            # 生成用户输入与助手回复 hook 命令
 │       ├── routers.ts                    # Hono 路由汇总与 React 应用托管
+│       ├── tpl-global.ts                 # PC 用户级 Codex 模板对象，当前仅完成源码迁移
+│       │   ├── source                    # 用户级 AGENTS、MCP、skills 与环境策略
+│       │   └── sync()                    # 安全合并用户配置；尚未实例化和接入入口
 │       ├── chat/
 │       │   ├── index.ts                  # /chat 模型与代理接口
 │       │   │   ├── /state                # 读取和保存模型配置
@@ -58,8 +61,6 @@ extends-codex/
 │       │   │   ├── scope-style           # 统一抽象、对象边界与 pnpm 公共库冲突处理
 │       │   │   ├── net-style             # 统一网络边界、长任务轮询与限流退避
 │       │   │   └── checklist-style       # 验收对象边界并在连续失败时停止试探
-│       │   ├── usercodex.ts              # 用户级 Codex 配置增量同步
-│       │   │   └── default()             # 合并 shell 环境排除项并保留其他配置
 │       │   ├── store.ts                  # 模板解析、保存与目标文件物化
 │       │   └── index.ts                  # /tpl 模板管理接口
 │       │       ├── /source                # 读取和更新模板源码
@@ -91,7 +92,7 @@ extends-codex/
 ## 运行链路
 
 1. `extends-codex dev` 通过 tsx watch 启动 `honoapp/src/index.ts`。
-2. 入口先向用户级 Codex 配置增量合并 shell 环境排除项，再由 Hono 运行时定位执行命令所在工作区，创建 `.codex`、`.zustand`，并将项目模板中的运行地址和 hook 命令渲染为真实值。
+2. 入口由 Hono 运行时定位执行命令所在工作区，创建 `.codex`、`.zustand`，并将项目模板中的运行地址和 hook 命令渲染为真实值；`TplGlobal` 尚未实例化，当前不会写入用户级 Codex 配置。
 3. Codex 的 `UserPromptSubmit` 和 `Stop` hooks 将消息发送到 `/ssepush`，页面通过 `/sse/events` 实时接收。
 4. 页面整理出的上下文可以发送给已配置模型，或作为独立任务交给 Codex CLI，并流式显示返回内容。
 
