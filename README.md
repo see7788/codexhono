@@ -34,12 +34,12 @@ pnpm dlx github:see7788/extends-codex restart
 extends-codex/
 ├── honoapp/
 │   └── src/
-│       ├── index.ts                      # 服务入口，只负责启动和模板物化
+│       ├── index.ts                      # 用户级同步、服务启动和项目模板物化入口
 │       ├── runtime.ts                    # 工作区与服务运行时
 │       │   ├── init()                    # 选择局域网地址和可用端口并启动 Hono
 │       │   └── HOOK_*_COMMAND            # 生成用户输入与助手回复 hook 命令
 │       ├── routers.ts                    # Hono 路由汇总与 React 应用托管
-│       ├── tpl-global.ts                 # PC 用户级 Codex 模板对象，当前仅完成源码迁移
+│       ├── tpl-global.ts                 # PC 用户级 AGENTS、MCP 与 skills 模板及幂等增量同步
 │       │   ├── source                    # 按 tplGlobal_t 定义用户级 AGENTS、MCP、skills 与环境策略
 │       │   └── sync()                    # 安全合并用户配置；尚未实例化和接入入口
 │       ├── chat/
@@ -57,11 +57,9 @@ extends-codex/
 │       │   │   └── POST /ssepush         # 接收 hook 消息并广播
 │       │   └── hookReceive.ts             # Codex hook stdin 转发入口
 │       ├── tpl/
-│       │   ├── source.ts                 # `.codex` 规则、配置和 skills 的模板源
-│       │   │   ├── tplGlobal_t           # 复用公共模板字段并声明用户级 configToml 差异
-│       │   │   ├── scope-style           # 统一抽象、对象边界与 pnpm 公共库冲突处理
-│       │   │   ├── net-style             # 统一网络边界、长任务轮询与限流退避
-│       │   │   └── checklist-style       # 验收对象边界并在连续失败时停止试探
+│       │   ├── source.ts                 # 项目级空模板、hooks 与 Electron 环境策略
+│       │   │   └── tplGlobal_t           # 复用模板结构并声明用户级 MCP 配置类型
+│       │   ├── render.ts                 # 项目级与用户级共同消费的 AGENTS/skill 渲染
 │       │   ├── store.ts                  # 模板解析、保存与目标文件物化
 │       │   └── index.ts                  # /tpl 模板管理接口
 │       │       ├── /source                # 读取和更新模板源码
@@ -93,7 +91,7 @@ extends-codex/
 ## 运行链路
 
 1. `extends-codex dev` 通过 tsx watch 启动 `honoapp/src/index.ts`。
-2. 入口由 Hono 运行时定位执行命令所在工作区，创建 `.codex`、`.zustand`，并将项目模板中的运行地址和 hook 命令渲染为真实值；`TplGlobal` 尚未实例化，当前不会写入用户级 Codex 配置。
+2. 入口先通过 `TplGlobal` 增量同步用户级 AGENTS、MCP 与 skills，再由 Hono 运行时定位执行命令所在工作区，创建 `.codex`、`.zustand`，并将项目模板中的 hook 命令和 Electron 环境策略渲染为真实值。
 3. Codex 的 `UserPromptSubmit` 和 `Stop` hooks 将消息发送到 `/ssepush`，页面通过 `/sse/events` 实时接收。
 4. 页面整理出的上下文可以发送给已配置模型，或作为独立任务交给 Codex CLI，并流式显示返回内容。
 
@@ -112,7 +110,7 @@ pnpm build:vscode
 本仓库的 `pnpm dev` 通过 tsx watch 直接运行 `honoapp/src/index.ts`；上面的 `pnpm dlx github:see7788/extends-codex dev` 是其他项目使用已发布 CLI 的方式，两者不是同一个入口。
 `pnpm docs:check` 会在 package、进程/路由入口或模板源变化时要求 README 或 `docs/` 同步变化，作为语义 checklist 之外的机械门禁。
 
-`.codex` 是运行时生成产物；规则、配置或 skill 的长期修改应落在 `honoapp/src/tpl/source.ts` 模板源中。
+`.codex` 是运行时生成产物；PC 用户级 AGENTS、MCP 与 skills 的长期规则只维护在 `honoapp/src/tpl-global.ts`，项目级 `honoapp/src/tpl/source.ts` 只维护 hooks 与 Electron 环境策略。
 模板只在存在多个真实消费点，或定义自身维护独立状态、生命周期、不变量时允许抽象；其他单点定义必须内联到真实消费处，移动可见性、文件或目录不视为复用。
 项目自定义函数、方法、构造器和 store action 出现两个及以上业务形参时统一使用一个对象形参，并优先内联其类型；框架和第三方固定回调签名不受此约束。
 `extends-*` 被视为用户个人长期维护的独立工具库。当前项目调用不满足其既有公开能力时，模板要求返回 `Library Boundary Decision Required` 并停止写入；未经用户选择，不得在工具库或消费项目新增文件、接口、适配层，不得修改接口参数或业务逻辑，只能先提供“新增能力”与“修改既有能力”的兼容性和影响分析供用户决策。

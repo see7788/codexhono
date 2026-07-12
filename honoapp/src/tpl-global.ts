@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { agentsMdRender, skillRender } from "./tpl/render";
 import type { tplGlobal_t } from "./tpl/source";
 
 const nodes = {
@@ -57,6 +58,7 @@ const source: tplGlobal_t = {
         items: [
           "前后端项目中的领域对象默认由服务端生产者作为 owner 定义；若真实生产者不是服务端，必须在实现前明确生产者、生命周期与稳定 ID 契约。",
           "消费者层（页面、路由、组件、adapter）只能通过 ID、owner action 或只读视图 DTO 消费对象；禁止根据页面字段、请求参数或展示需要拼装、扩展、重命名领域对象。",
+          "对象 owner 不能凭语义猜测临时创建。对象只在真实目录（服务端对象目录/切片仓库）内维护；运行时配置若为该对象职责内容，统一放在 `runtimeConfig`，不得虚构 `admin` 这类泛化目录名来承载配置。",
           "固定执行顺序：先建立服务端对象目录与切片仓库，再按当前页面的真实需要创建 action，最后实现对象路由与页面路由；禁止提前实现可能用得上的方法、类型或 DTO。",
           "页面功能目录与服务端对象目录保持对应；组合页面可以编排多个对象，但不得成为新的对象 owner，也不得把多个对象重新拼成消费侧领域模型。",
           "用户要求的任务一旦造成对象越界，必须先明确提醒并返回 `Boundary Check Failed`，说明越界点和建议归属；在边界修正前不得直接实现。",
@@ -76,12 +78,12 @@ const source: tplGlobal_t = {
         title: "显式配置红线",
         items: [
           "全局默认禁止用户维护的项目、应用、脚本和 `extends-*` 工具库读取、写入、删除、解构、枚举、代理或动态访问 `process.env`；环境变量不得成为模块、包、进程、窗口、路由、服务或业务对象之间的隐式参数、配置、状态、默认值或副作用通道。",
-          "数据是否敏感与是否使用环境变量无关：自用私有 owner 可以直接持有固定 token、密码、密钥和路径；公开 owner 使用有类型的调用契约。`env-meta` 只处理确实由宿主进程环境动态提供且无法绕开的外部协议值，不是密钥仓库，也不是隐藏私有常量的手段。",
-          "只有外部协议确实要求环境变量且无法改用有类型配置时，才允许在最小真实消费作用域建立 `env-meta`；它是语义 owner，不固定为目录或包。固定三级顺序是：单个仓库对象消费时作为该对象切片根数据的 `envMeta` 属性；同一项目或子包内多个对象消费时提升为实现根下 `env-meta` 目录；多个 pnpm 子项目消费时再提升为根目录直属 `<pnpm-root>/env-meta` workspace 子项目并由 `pnpm-workspace.yaml` 显式纳入。",
-          "只有所选层级的 `env-meta` owner 实现内部可以直接读写 `process.env`；主仓库、入口、runtime、config 子包、其他业务目录、应用、helper、wrapper、adapter、class、私有方法、测试和脚本均无例外。出现第一个真实跨边界消费点才允许向上提升，提升后必须删除低层重复 owner；移动或复制代码不构成边界修正。",
-          "`env-meta` 必须按真实环境字段提供有名称、有类型、可校验的最小公开能力；禁止暴露 `get(name: string)`、`set(name, value)`、字符串索引、任意键对象或无类型透传，禁止为了未来可能使用预留环境字段。",
-          "消费者必须通过 `env-meta` 的明确 import 和类型化字段或方法显式消费；禁止依赖导入副作用、先修改环境再让其他模块暗中读取，禁止展开、复制、继承或透传整个 `process.env`。向外部进程传递环境变量时，也只能使用 `env-meta` 按该协议明确生产的最小对象。",
-          "第三方依赖内部不可控的环境变量读写不追溯修改；调用层确实需要满足其环境变量协议时，只能显式调用 `env-meta` 的类型化能力，不得在其他位置包装或扩散隐式契约。发现 `env-meta` 以外的现有代码读写 `process.env` 时必须返回 `Implicit Configuration Boundary Failed`，指出迁入 `env-meta` 或改为显式配置的路径，在边界修正前不得继续相关实现。",
+          "数据是否敏感与是否使用环境变量无关：自用私有 owner 可以直接持有固定 token、密码、密钥和路径；公开 owner 使用有类型的调用契约。`envMeta` 只处理确实由宿主进程环境动态提供且无法绕开的外部协议值，不是密钥仓库，也不是隐藏私有常量的手段。",
+          "只有外部协议确实要求环境变量且无法改用有类型配置时，才允许在最小真实消费作用域建立 `envMeta`；它是语义 owner，不固定为目录或包。固定三级顺序是：单个仓库对象消费时作为该对象切片根数据的 `envMeta` 属性；同一项目或子包内多个对象消费时提升为实现根下 `envMeta` 目录；多个 pnpm 子项目消费时再提升为根目录直属 `<pnpm-root>/envMeta` workspace 子项目并由 `pnpm-workspace.yaml` 显式纳入。",
+          "只有所选层级的 `envMeta` owner 实现内部可以直接读写 `process.env`；主仓库、入口、runtime、config 子包、其他业务目录、应用、helper、wrapper、adapter、class、私有方法、测试和脚本均无例外。出现第一个真实跨边界消费点才允许向上提升，提升后必须删除低层重复 owner；移动或复制代码不构成边界修正。",
+          "`envMeta` 必须按真实环境字段提供有名称、有类型、可校验的最小公开能力；禁止暴露 `get(name: string)`、`set(name, value)`、字符串索引、任意键对象或无类型透传，禁止为了未来可能使用预留环境字段。",
+          "消费者必须通过 `envMeta` 的明确 import 和类型化字段或方法显式消费；禁止依赖导入副作用、先修改环境再让其他模块暗中读取，禁止展开、复制、继承或透传整个 `process.env`。向外部进程传递环境变量时，也只能使用 `envMeta` 按该协议明确生产的最小对象。",
+          "第三方依赖内部不可控的环境变量读写不追溯修改；调用层确实需要满足其环境变量协议时，只能显式调用 `envMeta` 的类型化能力，不得在其他位置包装或扩散隐式契约。发现 `envMeta` 以外的现有代码读写 `process.env` 时必须返回 `Implicit Configuration Boundary Failed`，指出迁入 `envMeta` 或改为显式配置的路径，在边界修正前不得继续相关实现。",
         ],
       },
       {
@@ -123,10 +125,6 @@ const source: tplGlobal_t = {
     ],
   },
   configToml: {
-    shellEnvironmentPolicy: {
-      inherit: "all",
-      exclude: ["ELECTRON_RUN_AS_NODE"],
-    },
     mcpServers: {
       "chrome-devtools": {
         args: ["chrome-devtools-mcp@latest"],
@@ -205,6 +203,8 @@ const source: tplGlobal_t = {
           items: [
             "先从生产者角度确认对象：谁创建、更新、销毁它，谁维护持久状态与稳定 ID；前后端项目默认以服务端对象目录作为 owner 边界。",
             "一个领域对象只有一个 owner；对象类型、schema、持久状态和本对象 action 在 owner 目录内收敛，不得在多个切片仓库或传输层重复建模。",
+            "对象名是边界与实现的强约束键：对象目录名、服务端对象名、切片仓库根属性名、前端消费目录名、路由名（前端目录/route/endpoint）及相关持久化 key 必须一一可映射为同名体系，不允许同一对象在任一层出现临时别名。",
+            "严禁引用未落地的 owner 名称：若对象目录不存在对应 owner，先回到任务需求确认再创建目录/切片；runtimeConfig 作为现有 owner 下的运行时配置入口，不可与 owner 同级伪装成业务目录。",
             "先实现 owner 的对象目录和切片仓库；action 只按当前已确认的页面或接口调用点创建，无真实调用点的未来方法、备用类型和预留 DTO 不得加入。",
             "对象暴露的服务端路由放在该对象目录内；页面路由或功能目录与服务端对象目录保持同名或明确映射，路由汇总层只组合，不拥有领域状态。",
             "消费者只允许通过稳定 ID、owner action 或只读视图 DTO 使用对象；禁止从页面字段、请求 contract 或组件状态反推并新建领域对象。",
@@ -224,16 +224,16 @@ const source: tplGlobal_t = {
         {
           title: "显式配置边界",
           items: [
-            "`process.env` 不是有类型的配置接口；除按最小真实消费作用域确定的 `env-meta` 边界外，用户维护代码不得对它执行任何读写，包括赋值、删除、解构、枚举、代理、动态键访问、`process.env.X ?? 默认值`、非空断言、类型断言或 schema 包装。",
-            "先判断值的生产方式，不以敏感性决定配置方式：自用私有包中的固定敏感值可以直接定义在真实 owner 内；公开包中的个人敏感值由有类型契约显式传入；只有值确实来自宿主进程环境且运行时可变时，才进入 `env-meta` 判断。",
-            "优先不用环境变量：编译期已知值留在所属 owner；运行时值优先由有类型 config 对象、config 子包、配置文件、CLI 参数、IPC contract 或持久化 owner 状态生产。只有确认外部协议无法绕开 `process.env` 后才建立 `env-meta`，不得把它作为所有项目或子包的默认脚手架。",
-            "`env-meta` 按真实消费边界逐级放置。第一级：只有一个仓库对象消费且生命周期跟随该对象时，放进对应对象切片仓库，作为切片根数据的 `envMeta` 属性；主仓库只组合该切片，不得为 env metadata 增加类型、常量或运行时对象。",
-            "第二级：同一应用、项目或子包内已有两个及以上对象真实消费时，才从对象切片提升为该实现根下的 `env-meta` 目录，由这些对象显式 import。第三级：已有两个及以上 pnpm 子项目真实消费时，才提升为 `<pnpm-root>/env-meta` 独立 workspace 子项目并由 `pnpm-workspace.yaml` 显式纳入。",
+            "`process.env` 不是有类型的配置接口；除按最小真实消费作用域确定的 `envMeta` 边界外，用户维护代码不得对它执行任何读写，包括赋值、删除、解构、枚举、代理、动态键访问、`process.env.X ?? 默认值`、非空断言、类型断言或 schema 包装。",
+            "先判断值的生产方式，不以敏感性决定配置方式：自用私有包中的固定敏感值可以直接定义在真实 owner 内；公开包中的个人敏感值由有类型契约显式传入；只有值确实来自宿主进程环境且运行时可变时，才进入 `envMeta` 判断。",
+            "优先不用环境变量：编译期已知值留在所属 owner；运行时值优先由有类型 config 对象、config 子包、配置文件、CLI 参数、IPC contract 或持久化 owner 状态生产。只有确认外部协议无法绕开 `process.env` 后才建立 `envMeta`，不得把它作为所有项目或子包的默认脚手架。",
+            "`envMeta` 按真实消费边界逐级放置。第一级：只有一个仓库对象消费且生命周期跟随该对象时，放进对应对象切片仓库，作为切片根数据的 `envMeta` 属性；主仓库只组合该切片，不得为 env metadata 增加类型、常量或运行时对象。",
+            "第二级：同一应用、项目或子包内已有两个及以上对象真实消费时，才从对象切片提升为该实现根下的 `envMeta` 目录，由这些对象显式 import。第三级：已有两个及以上 pnpm 子项目真实消费时，才提升为 `<pnpm-root>/envMeta` 独立 workspace 子项目并由 `pnpm-workspace.yaml` 显式纳入。",
             "作用域提升由跨越当前 owner 边界的真实消费点触发，不由未来规划、目录整齐或统一形式触发；提升时迁移唯一实现并删除原属性或目录，禁止 store、src 目录和 pnpm 根同时维护同一环境字段。普通对象 metadata 仍归对象 owner，不因采用相同作用域判断就改名为 `envMeta`。",
-            "`env-meta` 只实现当前真实消费点所需字段；每个字段或动作都必须具有明确业务名称、输入输出类型、校验规则和缺失行为。禁止通用 `get/set`、`Record<string, string>`、任意字符串键、全量快照或为未来预留字段，因为这些形式会重新丢失类型提示和 owner 边界。",
-            "读取结果必须由 `env-meta` 校验、归一化后以成立的业务类型返回；写入、更新和删除必须通过有语义的类型化方法显式触发，不得在模块导入时产生写入副作用，也不得靠修改全局环境让其他用户代码随后暗中读取。",
-            "跨包、跨窗口、跨进程和跨对象的消费必须在调用关系与 TypeScript 类型中可见，使用明确 import、构造参数、对象形参、IPC contract 或 owner action。外部命令需要 env 时，由 `env-meta` 根据该命令的真实协议生产最小对象，禁止展开、复制、继承或透传整个 `process.env`。",
-            "审查或修改代码时一旦发现 `env-meta` 以外的用户代码读写 `process.env`，先停止相关实现并报告 `Implicit Configuration Boundary Failed`；确认是否能删除环境变量依赖，确实不能时再确定 `env-meta` 的字段、类型、真实消费点和验证方式，禁止只移动代码消除告警。",
+            "`envMeta` 只实现当前真实消费点所需字段；每个字段或动作都必须具有明确业务名称、输入输出类型、校验规则和缺失行为。禁止通用 `get/set`、`Record<string, string>`、任意字符串键、全量快照或为未来预留字段，因为这些形式会重新丢失类型提示和 owner 边界。",
+            "读取结果必须由 `envMeta` 校验、归一化后以成立的业务类型返回；写入、更新和删除必须通过有语义的类型化方法显式触发，不得在模块导入时产生写入副作用，也不得靠修改全局环境让其他用户代码随后暗中读取。",
+            "跨包、跨窗口、跨进程和跨对象的消费必须在调用关系与 TypeScript 类型中可见，使用明确 import、构造参数、对象形参、IPC contract 或 owner action。外部命令需要 env 时，由 `envMeta` 根据该命令的真实协议生产最小对象，禁止展开、复制、继承或透传整个 `process.env`。",
+            "审查或修改代码时一旦发现 `envMeta` 以外的用户代码读写 `process.env`，先停止相关实现并报告 `Implicit Configuration Boundary Failed`；确认是否能删除环境变量依赖，确实不能时再确定 `envMeta` 的字段、类型、真实消费点和验证方式，禁止只移动代码消除告警。",
           ],
         },
         {
@@ -324,7 +324,7 @@ const source: tplGlobal_t = {
             "识别到依赖名、workspace 路径或源码归属为 `extends-*` 时，先把它视为独立长期工具库；不得因为它与当前项目处于同一 workspace、可直接编辑或由当前项目唯一消费，就把它降级为当前项目的业务代码。独立性、复用性和公开性是三个不同维度，不得把独立或复用自动解释成对所有人公开。",
             "修改配置、默认值、凭据或公开契约前，先依据用户声明、包元数据、发布方式和真实消费者确认该库是公开库还是自用私有库；证据不足且分类会改变实现时，必须向用户确认，不得为了通用安全建议擅自按公开库处理。",
             "公开库不得内置用户个人 token、密码和密钥，应由有类型的公开参数或配置对象接收；自用私有库允许在其真实 owner 内直接定义固定敏感数据，这不构成泄露设计，也不要求额外 wrapper、config 文件、环境变量或调用方参数。",
-            "敏感数据固定且属于私有库 owner 时优先直接定义；只有数据确实由宿主进程在运行时动态提供且无法使用明确配置时才使用最小作用域 `env-meta`。禁止把 `env-meta` 当作私有数据保险箱，或仅为了隐藏字面量制造隐式配置链。",
+            "敏感数据固定且属于私有库 owner 时优先直接定义；只有数据确实由宿主进程在运行时动态提供且无法使用明确配置时才使用最小作用域 `envMeta`。禁止把 `envMeta` 当作私有数据保险箱，或仅为了隐藏字面量制造隐式配置链。",
             "先只读核对工具库现有 exports、公开类型、调用契约和真实实现；当前调用不满足现有契约时返回 `Library Boundary Decision Required`，停止所有会改变工具库或消费项目结构、接口、参数和业务行为的写入。",
             "等待决策期间禁止新增文件、接口、类型、DTO、wrapper、adapter、compat 层或业务分支，禁止扩展参数、改变默认值、放宽类型、复制实现或在消费方重写同等逻辑；所谓最小改动、私有 helper 和临时兼容也不例外。",
             "“新增能力”建议必须说明能力应归属哪个工具库、拟新增的最小公开形态、为什么具有跨项目复用价值、现有消费者是否无感以及如何验证；没有跨项目复用价值时应明确建议不要进入工具库。",
@@ -716,6 +716,7 @@ const source: tplGlobal_t = {
           items: [
             "逐个对象确认 owner、生产者、生命周期、稳定 ID 与唯一切片仓库；任一项不明确时暂停实现。",
             "检查服务端对象目录、对象 store/action、对象路由、页面路由或功能目录是否保持一一对应或具有明确映射。",
+            "若对象名与目录、切片根属性、路由名、持久化 key、endpoint/IPC 标识不一致，必须在返回 `Boundary Check Failed` 后先定义统一映射表再继续。",
             "逐个新增 action 核对当前真实调用点；没有当前需求和调用点的方法、类型、DTO 或兼容层一律删除，不为未来可能使用而保留。",
             "检查页面、路由、组件和 adapter 是否只消费 owner 能力，未凭展示字段、请求参数或局部状态新增对象语义。",
             "用户任务本身若要求跨越已确认的对象边界，将该项标记为 `[!]`，先向用户说明越界点、影响与正确归属；边界未修正前不写实现。",
@@ -750,6 +751,7 @@ const source: tplGlobal_t = {
           items: [
             "每轮工作收尾前必须检查本轮是否有被用户打断、中途暴露、计划中列出但未完成的事项。",
             "未完成事项能继续处理就继续处理；不能处理时记录到根目录 TODO.md，并写清阻塞原因、下一步动作和相关文件。",
+            "重复 `new TplGlobal()` 不应被视为异常；允许在一个进程内多次创建实例。同步逻辑若依赖模板边界或 configToml，必须是幂等的，不可把实例状态作为隐式副作用横向污染下一实例。",
             "用户批评实现虚假、不是用户习惯、过度工程化、单点调用、先猜测复用或不符合 .codex 时，先定位当前模板应修改的位置：`F:\\\\pro\\\\extends-codex\\\\honoapp\\\\src\\\\tpl\\\\source.ts` 的 agentsMd、对应 skill 名、section 标题；给出应新增或改写的具体规则，再继续修正当前代码。",
             "被批评后禁止只解释原因或只道歉；必须输出“应补约束位置 + 具体约束文本 + 当前代码修正动作”。",
             "收尾回复必须标注实现状态：已真实接线并验证、已接线未验证、未接线等待信息、被阻塞；禁止把未验证或未接线内容表述为完成。",
@@ -882,55 +884,65 @@ const source: tplGlobal_t = {
   },
 };
 export default class TplGlobal {
-  private readonly source = source;
-
   sync() {
-    const configPath = join(homedir(), ".codex", "config.toml");
-    const config = existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
-    const newline = config.includes("\r\n") ? "\r\n" : "\n";
-    const lines = config.split(/\r?\n/);
-    const tableStart = lines.findIndex(line => line.trim() === "[shell_environment_policy]");
-    const policy = this.source.configToml.shellEnvironmentPolicy;
+    const codexPath = join(homedir(), ".codex");
+    const agentsPath = join(codexPath, "AGENTS.md");
+    const agentsCurrent = existsSync(agentsPath) ? readFileSync(agentsPath, "utf8") : "";
+    const agentsStart = "<!-- extends-codex-global:start -->";
+    const agentsEnd = "<!-- extends-codex-global:end -->";
+    const agentsStartIndex = agentsCurrent.indexOf(agentsStart);
+    const agentsEndIndex = agentsCurrent.indexOf(agentsEnd);
+    if ((agentsStartIndex === -1) !== (agentsEndIndex === -1) || agentsEndIndex < agentsStartIndex) {
+      throw new Error(`Invalid extends-codex block in ${agentsPath}`);
+    }
+    const agentsBlock = `${agentsStart}\n${agentsMdRender(source)}${agentsEnd}`;
+    const agentsNext = agentsStartIndex === -1
+      ? `${agentsCurrent}${agentsCurrent && !agentsCurrent.endsWith("\n") ? "\n" : ""}${agentsCurrent ? "\n" : ""}${agentsBlock}\n`
+      : `${agentsCurrent.slice(0, agentsStartIndex)}${agentsBlock}${agentsCurrent.slice(agentsEndIndex + agentsEnd.length)}`;
 
-    if (tableStart === -1) {
-      const separator = config && !config.endsWith("\n") ? newline : "";
-      const prefix = config && config.trim() ? newline : "";
-      const content = [
-        "[shell_environment_policy]",
-        `inherit = ${JSON.stringify(policy.inherit)}`,
-        `exclude = ${JSON.stringify(policy.exclude)}`,
+    const configPath = join(codexPath, "config.toml");
+    const configCurrent = existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
+    const configNewline = configCurrent.includes("\r\n") ? "\r\n" : "\n";
+    const configLines = configCurrent.split(/\r?\n/);
+    let configNext = configCurrent;
+    for (const [name, server] of Object.entries(source.configToml.mcpServers)) {
+      const table = `[mcp_servers.${name}]`;
+      if (configLines.some(line => [table, `[mcp_servers.${JSON.stringify(name)}]`].includes(line.trim()))) {
+        continue;
+      }
+      const block = [
+        table,
+        `command = ${JSON.stringify(server.command)}`,
+        ...(server.args ? [`args = ${JSON.stringify(server.args)}`] : []),
         "",
-      ].join(newline);
+      ].join(configNewline);
+      configNext = `${configNext}${configNext && !configNext.endsWith("\n") ? configNewline : ""}${configNext.trim() ? configNewline : ""}${block}`;
+    }
+
+    const skills = Object.entries(source.skills).map(([dir, skill]) => {
+      const path = join(codexPath, "skills", dir, "SKILL.md");
+      const marker = "<!-- extends-codex-global-skill -->";
+      const content = `${marker}\n${skillRender({ dir, skill })}`;
+      const current = existsSync(path) ? readFileSync(path, "utf8") : undefined;
+      if (current !== undefined && current !== content && !current.startsWith(`${marker}\n`)) {
+        throw new Error(`Global skill is owned by another source: ${path}`);
+      }
+      return { content, current, path };
+    });
+
+    if (agentsNext !== agentsCurrent) {
+      mkdirSync(dirname(agentsPath), { recursive: true });
+      writeFileSync(agentsPath, agentsNext, "utf8");
+    }
+    if (configNext !== configCurrent) {
       mkdirSync(dirname(configPath), { recursive: true });
-      writeFileSync(configPath, `${config}${separator}${prefix}${content}`, "utf8");
-      return;
+      writeFileSync(configPath, configNext, "utf8");
     }
-
-    const tableEndOffset = lines.slice(tableStart + 1).findIndex(line => /^\s*\[/.test(line));
-    const tableEnd = tableEndOffset === -1 ? lines.length : tableStart + 1 + tableEndOffset;
-    const inheritIndex = lines.slice(tableStart + 1, tableEnd)
-      .findIndex(line => /^\s*inherit\s*=/.test(line));
-    const inheritLine = `inherit = ${JSON.stringify(policy.inherit)}`;
-
-    if (inheritIndex === -1) {
-      lines.splice(tableStart + 1, 0, inheritLine);
-    } else {
-      lines[tableStart + 1 + inheritIndex] = inheritLine;
+    for (const skill of skills) {
+      if (skill.content !== skill.current) {
+        mkdirSync(dirname(skill.path), { recursive: true });
+        writeFileSync(skill.path, skill.content, "utf8");
+      }
     }
-
-    const currentTableEnd = tableEnd + (inheritIndex === -1 ? 1 : 0);
-    const currentExcludeIndex = lines.slice(tableStart + 1, currentTableEnd)
-      .findIndex(line => /^\s*exclude\s*=/.test(line));
-    if (currentExcludeIndex === -1) {
-      lines.splice(tableStart + 2, 0, `exclude = ${JSON.stringify(policy.exclude)}`);
-    } else {
-      const lineIndex = tableStart + 1 + currentExcludeIndex;
-      const existing = [...lines[lineIndex]!.matchAll(/"((?:\\.|[^"\\])*)"/g)]
-        .map(match => JSON.parse(`"${match[1]}"`) as string);
-      lines[lineIndex] = `exclude = ${JSON.stringify([...new Set([...existing, ...policy.exclude])])}`;
-    }
-
-    mkdirSync(dirname(configPath), { recursive: true });
-    writeFileSync(configPath, lines.join(newline), "utf8");
   }
 }
