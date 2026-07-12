@@ -1,6 +1,6 @@
 # extends-codex
 
-extends-codex 是运行在 Codex CLI 旁边的本地上下文工作台。它通过 Codex hooks 捕获用户输入和助手回复，由 Hono 服务将事件流推送到 React 页面；页面还可以整理上下文节点、查看 TypeScript 文件与调用关系、调用 Codex CLI 或兼容模型，并维护项目的 `.codex/AGENTS.md`、`config.toml` 和 skills。适合需要检查、裁剪、重放 Codex 上下文，或集中维护项目级 Codex 配置的场景。
+extends-codex 是运行在 Codex CLI 旁边的本地上下文与配置工作台。它通过 Codex hooks 捕获用户输入和助手回复，由 Hono 服务将事件流推送到 React 页面；页面可以整理上下文节点、查看 TypeScript 文件与调用关系、调用 Codex CLI 或兼容模型，并维护项目的 `.codex/AGENTS.md`、`config.toml` 和 skills。启动时还会幂等同步 PC 用户级 AGENTS、MCP 与全局 skills，适合检查、裁剪、重放 Codex 上下文，或集中维护 Codex 配置的场景。
 
 ## 快速使用
 
@@ -34,14 +34,14 @@ pnpm dlx github:see7788/extends-codex restart
 extends-codex/
 ├── honoapp/
 │   └── src/
-│       ├── index.ts                      # 用户级同步、服务启动和项目模板物化入口
+│       ├── index.ts                      # 入口，只组合用户级同步、服务启动和项目模板物化
 │       ├── runtime.ts                    # 工作区与服务运行时
 │       │   ├── init()                    # 选择局域网地址和可用端口并启动 Hono
 │       │   └── HOOK_*_COMMAND            # 生成用户输入与助手回复 hook 命令
 │       ├── routers.ts                    # Hono 路由汇总与 React 应用托管
-│       ├── tpl-global.ts                 # PC 用户级 AGENTS、MCP 与 skills 模板及幂等增量同步
+│       ├── tpl-global.ts                 # PC 用户级 AGENTS、MCP 与 skills 的唯一模板源
 │       │   ├── source                    # 按 tplGlobal_t 定义用户级 AGENTS、MCP、skills 与环境策略
-│       │   └── sync()                    # 安全合并用户配置；尚未实例化和接入入口
+│       │   └── new TplGlobal()           # 幂等合并用户配置，并保护非本模板拥有的 skill
 │       ├── chat/
 │       │   ├── index.ts                  # /chat 模型与代理接口
 │       │   │   ├── /state                # 读取和保存模型配置
@@ -57,10 +57,11 @@ extends-codex/
 │       │   │   └── POST /ssepush         # 接收 hook 消息并广播
 │       │   └── hookReceive.ts             # Codex hook stdin 转发入口
 │       ├── tpl/
-│       │   ├── source.ts                 # 项目级空模板、hooks 与 Electron 环境策略
-│       │   │   └── tplGlobal_t           # 复用模板结构并声明用户级 MCP 配置类型
+│       │   ├── source.ts                 # 项目级结构化模板与校验契约
+│       │   │   ├── tplSchema             # 校验 AGENTS sections、hooks、环境策略与 skills
+│       │   │   └── tplGlobal_t           # 复用模板结构并扩展用户级 MCP 配置类型
 │       │   ├── render.ts                 # 项目级与用户级共同消费的 AGENTS/skill 渲染
-│       │   ├── store.ts                  # 模板解析、保存与目标文件物化
+│       │   ├── store.ts                  # 模板解析、持久化与 `.codex` 目标物化
 │       │   └── index.ts                  # /tpl 模板管理接口
 │       │       ├── /source                # 读取和更新模板源码
 │       │       └── /agentsMd|configToml|skills/* # 发布或删除 `.codex` 目标
@@ -91,7 +92,7 @@ extends-codex/
 ## 运行链路
 
 1. `extends-codex dev` 通过 tsx watch 启动 `honoapp/src/index.ts`。
-2. 入口先通过 `TplGlobal` 增量同步用户级 AGENTS、MCP 与 skills，再由 Hono 运行时定位执行命令所在工作区，创建 `.codex`、`.zustand`，并将项目模板中的 hook 命令和 Electron 环境策略渲染为真实值。
+2. 入口先通过 `new TplGlobal()` 增量同步用户级 AGENTS、MCP 与 skills，再由 Hono 运行时定位执行命令所在工作区、启动服务，并将项目模板中的 hook 命令和 Electron 环境策略渲染到工作区 `.codex`；模板状态持久化在 `.zustand`。
 3. Codex 的 `UserPromptSubmit` 和 `Stop` hooks 将消息发送到 `/ssepush`，页面通过 `/sse/events` 实时接收。
 4. 页面整理出的上下文可以发送给已配置模型，或作为独立任务交给 Codex CLI，并流式显示返回内容。
 
