@@ -72,6 +72,16 @@ const source: tplGlobal_t = {
         ],
       },
       {
+        title: "显式配置红线",
+        items: [
+          "用户维护的项目、应用、脚本和 `extends-*` 工具库一律禁止读取 `process.env`；禁止把环境变量用作模块、包、进程、窗口、路由、服务或业务对象之间的参数、配置、状态或默认值。",
+          "把 `process.env` 移入入口、runtime、config 子包、helper、wrapper、adapter、class、私有方法或文件作用域仍属于隐式传参，不构成修复；也禁止借 dotenv 或动态属性读取规避这条规则。",
+          "已知配置直接定义在真实 owner 中；运行时可变配置必须通过有类型的 config 对象、config 子包、配置文件、CLI 参数或 owner 状态显式提供，并在唯一入口完成校验和归一化，消费方只能通过类型明确的 import、构造参数、方法参数或 owner action 获取。",
+          "密钥、路径、host、port、开关和第三方凭据不因敏感性或部署习惯获得例外；需要启动外部进程时，只能把已由显式配置提供的值写入对方协议要求的最小 `env`，禁止从当前 `process.env` 复制、继承或转发。",
+          "第三方依赖内部不可控的环境变量读取不追溯修改；但用户维护的调用层不得依赖、包装或扩散这种隐式契约。发现现有代码读取 `process.env` 时必须返回 `Implicit Configuration Boundary Failed`，指出配置 owner、显式类型和迁移路径，在消除读取前不得继续新增相关业务实现。",
+        ],
+      },
+      {
         title: "文本完整性红线",
         items: [
           "UTF-8 无 BOM、没有替换字符只代表字节格式可接受，不代表中文语义正确；错误解码后的乱码再次保存，仍可能是完全合法的 UTF-8。",
@@ -194,6 +204,17 @@ const source: tplGlobal_t = {
             "后端 route handler、业务对象边界、实例复用、schema/cache 收敛使用「后端作用域」。",
             "抽象、复用、文件拆分和最小作用域先看「通用作用域」；跨文件导出和默认导出看「导出边界」。",
             "变量、形参和方法命名只引用 variable-style；业务状态流转只引用 zustand-store-style；网络协议只引用 net-style。",
+          ],
+        },
+        {
+          title: "显式配置边界",
+          items: [
+            "`process.env` 不是有类型的配置接口，用户维护代码不得读取、解构、枚举、代理或动态访问它；禁止使用 `process.env.X ?? 默认值`、非空断言、类型断言或 schema 包装把隐式输入伪装成可靠配置。",
+            "配置由真实生产者定义：编译期已知值留在所属 owner；运行时值由一个明确的 config owner 以有类型对象、config 子包、配置文件、CLI 参数或持久化状态生产。config 子包只能定义、校验和导出显式配置，不得在包内重新读取环境变量。",
+            "配置消费必须在调用关系和 TypeScript 类型中可见；跨包、跨窗口、跨进程和跨对象时使用明确 import、构造参数、对象形参、IPC contract 或 owner action，禁止依赖宿主进程环境、全局副作用或字符串键约定。",
+            "配置值只校验一次：由 config owner 在入口处完成解析、必填检查、默认值和归一化，后续消费者接收已经成立的业务类型；业务模块不得重复读取原始来源、重复兜底或自行猜测默认值。",
+            "外部命令确实以环境变量作为协议时，启动方可以从已经类型化的配置构造最小 `env` 对象；不得展开、复制或透传 `process.env`，不得让子进程继承与该协议无关的隐式参数。",
+            "审查或修改代码时一旦发现用户维护代码读取 `process.env`，先停止相关实现并报告 `Implicit Configuration Boundary Failed`；只有确认 owner、显式配置形态、真实消费点和迁移验证后才能改动，不得用移动代码位置消除告警。",
           ],
         },
         {
@@ -829,7 +850,7 @@ export default class TplGlobal {
   private readonly source = source;
 
   sync() {
-    const configPath = join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "config.toml");
+    const configPath = join(homedir(), ".codex", "config.toml");
     const config = existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
     const newline = config.includes("\r\n") ? "\r\n" : "\n";
     const lines = config.split(/\r?\n/);
