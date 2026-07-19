@@ -741,6 +741,20 @@ const source: GlobalSource = {
             "恢复、回滚、checkout、restore、整文件覆盖、文件移动或重命名会改变内容或历史可达性时，parent 必须先保全当前哈希、脏 diff、Timeline/Git 候选与恢复路径，向老板展示候选时间戳和预计差异；没有老板确认不得执行。",
             "提交或 push 失败时任务保持未完成，记录失败原因与本地提交标识；只有老板明确要求推送或项目已授权当前分支自动推送时，parent 才把检查点推送到远端。",
           ],
+          code: {
+            language: "powershell",
+            content: [
+              "git status --short -- <path-1> <path-2>",
+              "git diff --check -- <path-1> <path-2>",
+              "git add -- <path-1> <path-2>",
+              "git diff --cached --check",
+              "git diff --cached --name-only",
+              "git diff --cached -- <path-1> <path-2>",
+              "git commit -m \"<independent-deliverable>\"",
+              "git rev-parse --verify HEAD",
+              "# 仅在老板明确要求或项目已授权当前分支自动推送时执行：git push origin <branch>",
+            ].join("\n"),
+          },
         },
         {
           title: "失败刹车",
@@ -1000,6 +1014,15 @@ const source: GlobalSource = {
             "模板、规则、配置和代码还必须运行其真实 parser、schema、类型检查或生成器；仅语法通过不能证明语义完整。",
             "写后检查只能发现漏网问题，不能为高风险读取或整文件写入提供事后免责。",
           ],
+          code: {
+            language: "powershell",
+            content: [
+              "git diff --check -- <path-1> <path-2>",
+              "git diff --numstat -- <path-1> <path-2>",
+              "git diff -- <path-1> <path-2>",
+              "# 随后运行任务信封指定的 parser、schema、类型检查或生成验证。",
+            ].join("\n"),
+          },
         },
         {
           title: "事故恢复（最后手段）",
