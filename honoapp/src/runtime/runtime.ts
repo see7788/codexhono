@@ -1,12 +1,11 @@
 import { serve } from "@hono/node-server";
-import { existsSync } from "node:fs";
 import type { Hono } from "hono";
 import type { NetworkInterfaceInfo } from "node:os";
 import { networkInterfaces } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import pkg from "../package.json"
-class Runtime {
+import pkg from "../../package.json"
+export default class Runtime {
   WORKSPACE_PATH: string;
   CODEX_PATH: string;
   ZUSTAND_PATH: string;
@@ -17,8 +16,8 @@ class Runtime {
   TSX_CLI_PATH: string;
   HOOK_USER_COMMAND = "";
   HOOK_ASSISTANT_COMMAND = "";
-  constructor() {
-    this.WORKSPACE_PATH = this.workspacePathGet();
+  constructor(input: { workspacePath: string }) {
+    this.WORKSPACE_PATH = this.pathNormalize(input.workspacePath);
     this.HONO_PATH = this.pathNormalize(fileURLToPath(new URL("..", import.meta.url)));
     this.CODEX_PATH = join(this.WORKSPACE_PATH, ".codex");
     this.ZUSTAND_PATH = join(this.WORKSPACE_PATH, ".zustand");
@@ -29,6 +28,7 @@ class Runtime {
     this.HOSTNAME = this.privateHostnameGet();
     this.portSync();
     return new Promise<ReturnType<typeof serve>>((resolve, reject) => {
+      let portReuseAttempts = 0;
       const listen = () => {
         const candidate = serve(
           {
@@ -44,8 +44,14 @@ class Runtime {
         const handleError = (error: Error & { code?: unknown }) => {
           candidate.off("error", handleError);
           if (error.code === "EADDRINUSE") {
+            if (portReuseAttempts < 20) {
+              portReuseAttempts += 1;
+              setTimeout(listen, 100);
+              return;
+            }
             this.PORT += 1;
             this.portSync();
+            portReuseAttempts = 0;
             listen();
             return;
           }
@@ -55,23 +61,18 @@ class Runtime {
       };
       listen();
     }).then((server) => {
-      server.on("error", (error) => {
-        console.error(pkg.name+" server failed:", error);
-        process.exit(1);
-      });
+      server.on("error", (error) => console.error(pkg.name + " server failed:", error));
       console.error(`${pkg.name} listening on ${this.ORIGIN}`);
-      const closeServer = () => {
-        const nodeServer = server as typeof server & {
-          closeAllConnections?: () => void;
-        };
-        server.close(() => {
-          process.exit(0);
-        });
-        nodeServer.closeAllConnections?.();
+      return {
+        origin: this.ORIGIN,
+        stop: () => new Promise<void>((resolve, reject) => {
+          const nodeServer = server as typeof server & {
+            closeAllConnections?: () => void;
+          };
+          server.close((error) => error ? reject(error) : resolve());
+          nodeServer.closeAllConnections?.();
+        }),
       };
-      process.once("SIGINT", closeServer);
-      process.once("SIGTERM", closeServer);
-      return server;
     });
   }
   private portSync() {
@@ -104,20 +105,6 @@ class Runtime {
     return hostname;
   }
 
-  private workspacePathGet() {
-    let currentPath = this.pathNormalize(process.cwd());
-    let workspacePath = currentPath;
-    while (true) {
-      if (existsSync(join(currentPath, "package.json"))) {
-        workspacePath = currentPath;
-      }
-      const parentPath = this.pathNormalize(resolve(currentPath, ".."));
-      if (parentPath === currentPath) break;
-      currentPath = parentPath;
-    }
-    return workspacePath;
-  }
-
   private toCommandPath(value: string) {
     return value.replaceAll("\\", "/");
   }
@@ -126,5 +113,3 @@ class Runtime {
     return resolve(value).replace(/^([a-z]):/, (_, drive: string) => `${drive.toUpperCase()}:`);
   }
 }
-
-export default new Runtime();

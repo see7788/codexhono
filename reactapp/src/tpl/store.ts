@@ -1,8 +1,8 @@
 import { hc } from "hono/client";
-import immerStateCreator from "extends-zustand/src/immerStateCreator";
-import type codextplRouter from "honoapp/src/tpl";
+import immerStateCreator from "extends-zustand/immerStateCreator";
+import type tplRouterCreate from "honoapp/src/tpl";
 
-const client = hc<typeof codextplRouter>(location.origin);
+const client = hc<ReturnType<typeof tplRouterCreate>>(location.origin);
 
 type SourceLoadResult = {
   nodes: Record<string, string | number>;
@@ -25,8 +25,7 @@ type TplActions = {
   sourceSave: (source: string) => Promise<void>;
   sourceSaveStatusChange: (status: SourceSaveStatus) => void;
   sourceSaveTickNext: () => void;
-  targetDelete: (target: string) => Promise<void>;
-  targetPut: (target: string, preview: string) => Promise<void>;
+  outputMaterialize: () => Promise<void>;
 };
 
 const sourceTextGet = (data: SourceLoadResult) => [
@@ -38,12 +37,6 @@ const sourceTextGet = (data: SourceLoadResult) => [
 ].join("\n");
 
 const createStore = immerStateCreator<{ tpl: TplState; tplActions: TplActions }>((set) => {
-  const existingTargetDelete = (target: string) => set((state) => {
-    state.tpl.existingTargets = state.tpl.existingTargets.filter(item => item !== target);
-  });
-  const existingTargetPut = (target: string) => set((state) => {
-    if (!state.tpl.existingTargets.includes(target)) state.tpl.existingTargets.push(target);
-  });
   const tpl: TplState = {
     existingTargets: [],
     loading: false,
@@ -66,7 +59,7 @@ const createStore = immerStateCreator<{ tpl: TplState; tplActions: TplActions }>
       });
     },
     sourceSave: async (source) => {
-      const response = await client.tpl.source.$post({ json: source });
+      const response = await client.tpl.source.$put({ json: { source } });
       if (!response.ok) throw new Error(await response.text());
       set((state) => {
         state.tpl.sourceSaveStatus = "saved";
@@ -78,41 +71,13 @@ const createStore = immerStateCreator<{ tpl: TplState; tplActions: TplActions }>
     sourceSaveTickNext: () => set((state) => {
       state.tpl.sourceSaveTick += 1;
     }),
-    targetDelete: async (target) => {
+    outputMaterialize: async () => {
       set((state) => {
         state.tpl.loading = true;
       });
       try {
-        const response = target === "agentsMd"
-          ? await client.tpl.agentsMd.$delete()
-          : target === "configToml"
-            ? await client.tpl.configToml.$delete()
-            : await client.tpl.skills[":dir"].$delete({
-              param: { dir: target.slice("skill:".length) },
-            });
+        const response = await client.tpl.materialize.$post();
         if (!response.ok) throw new Error(await response.text());
-        existingTargetDelete(target);
-      } finally {
-        set((state) => {
-          state.tpl.loading = false;
-        });
-      }
-    },
-    targetPut: async (target, preview) => {
-      set((state) => {
-        state.tpl.loading = true;
-      });
-      try {
-        const response = target === "agentsMd"
-          ? await client.tpl.agentsMd.$put({ json: preview })
-          : target === "configToml"
-            ? await client.tpl.configToml.$put({ json: preview })
-            : await client.tpl.skills[":dir"].$put({
-              param: { dir: target.slice("skill:".length) },
-              json: preview,
-            });
-        if (!response.ok) throw new Error(await response.text());
-        existingTargetPut(target);
       } finally {
         set((state) => {
           state.tpl.loading = false;

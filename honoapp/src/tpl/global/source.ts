@@ -1,33 +1,75 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-import { agentsMdRender, skillRender } from "./tpl/render";
-import type { tplGlobal_t } from "./tpl/source";
+import type { GlobalSource } from "../output/schema";
 
-const nodes = {
-  checklistStyle: "checklist-styleskill",
-  codebaseMcpStyle: "codebase-mcp-styleskill",
-  docStyle: "doc-styleskill",
-  fileIo: "file-io-styleskill",
-  netStyle: "net-styleskill",
-  scopeStyle: "scope-styleskill",
-  variableStyle: "variable-styleskill",
-  zustandStoreStyle: "zustand-store-styleskill",
-} as const
-const source: tplGlobal_t = {
+export const nodes = {
+  checklistStyle: "checklist-styleskill", // 可审计工作流：需求澄清、任务派工、状态监督和中断恢复
+  codebaseMcpStyle: "codebase-mcp-styleskill", // 代码库调查：源码检索、调用关系和影响范围
+  docStyle: "doc-styleskill", // 文档：README、项目说明和公开结构
+  fileIo: "file-io-styleskill", // 文件操作：安全读写、编码检查和事故恢复
+  netStyle: "net-styleskill", // 网络边界：Hono API、HTTP、SSE 和 WebSocket
+  scopeStyle: "scope-styleskill", // 作用域：对象边界、复用、导出、依赖和运行时配置
+  variableStyle: "variable-styleskill", // 命名：变量、形参、方法、action 和路由层级
+  zustandStoreStyle: "zustand-store-styleskill", // Zustand：主/切片仓库、action、状态流和持久化
+} as const;
+
+const source: GlobalSource = {
+  scope: "global",
   nodes,
+  agents: {
+    indexer: {
+      description: "轻量执行 agent；用于简单、边界明确、低耦合的调查、检查和局部修改。",
+      model: "gpt-5.6-luna",
+      modelReasoningEffort: "high",
+      developerInstructions: `"""
+只处理简单、边界明确的任务，保持最小改动并做针对性验证。不要自行扩大范围或做架构决策；如果任务实际变复杂，停止并向 parent 报告。
+最终只汇报结果、改动文件、验证情况和风险或阻塞点。
+"""`,
+    },
+    logger: {
+      description: "低成本监督与状态记录 agent；监督任务并独占更新任务状态。",
+      model: "gpt-5.6-luna",
+      modelReasoningEffort: "low",
+      developerInstructions: `"""
+监督所有实际委派的工作者，并依据真实状态和验收证据更新既有任务状态。
+任务全部完成时标记 \`[x]\` 并向 parent 汇报；中断、阻塞、冲突或未续排时，报告关联任务和事实。
+不改任务内容，不派工，不参与业务实现或 review。
+"""`,
+    },
+    worker: {
+      description: "默认主力执行 agent；用于边界清晰的实现、调试、测试和较完整调查。",
+      model: "gpt-5.6-terra",
+      modelReasoningEffort: "medium",
+      developerInstructions: `"""
+负责 parent 委派的具体执行工作。遵守根目录及目标 repo 的 AGENTS.md，严格限定 scope 和写入 ownership，做最小必要改动并完成与风险相称的验证。
+不要修改 ownership 之外的文件；发现跨范围依赖时只报告。遇到阻塞时返回已尝试的方法、关键证据和一个具体问题。
+最终只汇报改动文件、验证结果、风险或阻塞点。
+"""`,
+    },
+    tokener: {
+      description: "高能力 reviewer/teacher；仅用于关键 review 或帮助解除 worker 阻塞。",
+      model: "gpt-5.6-sol",
+      modelReasoningEffort: "high",
+      developerInstructions: `"""
+少量参与，默认不修改文件。Review 时优先检查 correctness、security、behavior regression 和 missing tests；按严重度给出有证据的 findings，忽略纯风格问题。
+帮助解除阻塞时，指出根因、验证方式和最小可执行方向，不接管普通实现。输出保持简短；没有发现问题时说明 residual risk。
+"""`,
+    },
+  },
   agentsMd: {
     sections: [
       {
         title: "总纲",
         items: [
+          "每项工作开始前，必须确认 `worker`、`indexer`、`tokener` 三个全局定义可用：项目级 `.codex/agents/` 优先，缺失时才回退用户级 agents。三项定义缺一不可，缺失时必须立即告知用户并停止工作；按任务选择实际参与的角色：`indexer` 用于轻量、边界明确的调查、检查和局部修改，`worker` 用于主力实现、调试、测试和较完整调查，`tokener` 用于关键 review、teacher 式指导或解除 `worker` 阻塞，默认不修改。三者不构成固定流水线，也不要求同时参与。",
           "TypeScript 优先；React、Hono、antd、Vite、zustand、immer 优先。",
-          `读写仓库文件时使用 ${nodes.fileIo} skill；所有文件必须是 UTF-8 无 BOM。`,
-          "先按运行侧和任务类型选择 skill；总纲只保留全局硬规则，不在总纲展开具体实现细则。",
-          `默认最小实现；抽象准入、内联与归一化放置统一按 ${nodes.scopeStyle} 执行。`,
-          `任务拆解、进度状态和多阶段验证使用 ${nodes.checklistStyle}；用户说 todolist、todo list、任务清单或清单时按 checklist 标准执行，对外表达优先沿用用户说法，状态标记仍使用 [ ]、[~]、[x]、[!]。`,
-          "出现 bug、报错、服务不可达、页面异常或行为不符合预期时，先按已有 skill 判断；缺少必要规则导致无法稳定决策时，暂停处理并说明缺少哪类 skill。"
-        ],
+          "先按任务类型选择对应 skill；agentsMd 只负责分流，具体约束只在 skill 中维护。",
+          "普通项目任务只处理当前项目；不得因用户级 Codex 配置而引入无关项目、服务或工具库。",
+          "用户明确指定项目、子项目、目录或排除范围后，将其作为写入范围锁；范围外只允许为定位而只读检查，任何写入、构建副作用或运行态操作都必须获得明确授权。",
+          "用户通过补充、纠正、打断、撤销或新的验收描述改变方向时，最新指令立即覆盖旧计划、旧假设和未完成台账项；不得继续惯性执行旧方向，也不得自行回滚已做改动。",
+          "用户明确指定交付入口、交互形式、输出形式或验收表现时，将其视为设计不变量；不得为了实现方便替换为不同的入口、页面、交互或答复形式。宿主能力不支持时先说明限制并给出保留核心意图的原生替代方案。",
+          "用户允许就关键歧义主动提问；仅当答案会实质影响任务范围、验收标准、对外副作用、数据处理或是否回滚时才暂停等待，其余独立工作继续按最小合理假设推进。",
+            "跨 pnpm 包消费只允许使用包名 import 与 package.json 的 `workspace:*`（或用户明确的发布版本）声明；禁止 `file:`、`link:`、`../`、绝对路径或直接源码相对 import，即使测试、临时迁移或当前机器可运行也不例外。",
+            `默认禁止通过 \`process\` 传递业务或项目参数；确实无法避免时，项目唯一的 \`store.ts\` 或 \`index.*\` 必须立即转换为有类型配置并说明必要性，其他细节遵循 ${nodes.scopeStyle}。`,
+          ],
       },
       {
         title: "场景分流",
@@ -38,88 +80,32 @@ const source: tplGlobal_t = {
           `Hono API、页面 API、外部 HTTP、SSE、WebSocket 和同进程 Hono 调用使用 ${nodes.netStyle}。`,
           `前端/后端 store、action、业务状态流转、流式状态和订阅推送使用 ${nodes.zustandStoreStyle}。`,
           `变量、形参、对象方法、store action 和路由层级命名使用 ${nodes.variableStyle}。`,
-          `README、项目说明和公开结构说明使用 ${nodes.docStyle}。`
+          `任务台账、待办事项、todolist、todoclick、任务拆解、进度状态、阻塞同步和多阶段验证统一使用 ${nodes.checklistStyle}。`,
+          `仓库文件读写、文本完整性、最小 patch 和事故恢复使用 ${nodes.fileIo}。`,
+          `README、项目说明和公开结构说明使用 ${nodes.docStyle}。`,
         ],
       },
       {
-        title: "Git 自动执行权限",
+        title: "Agents 兜底定义",
         items: [
-          "用户主要单人维护这些项目，AI 对当前任务和当前分支拥有长期 Git 高权限；有助于完成、验证、回退或发布当前任务的 Git 操作无需再次请求确认。",
-          "唯一分支限制是禁止创建新分支、禁止切换到其他分支；所有实现、历史整理、同步和发布都在用户当前分支完成。",
-          "AI 可以按任务需要自行执行 status、diff、log、reflog、fetch、pull、add、restore、commit、amend、revert、reset、cherry-pick、merge、rebase、push、tag 及远端 tag 同步，不把这些操作拆成逐次授权问题。",
-          "允许整理或重写当前分支历史，并在确有需要时使用 force-with-lease；执行破坏性工作树或历史操作前必须记录本地与远端引用，并先创建可恢复的 commit 或 tag，禁止无恢复点丢失现有内容。",
-          "长任务每到一个已真实验证通过且可独立回退的里程碑，自动提交并推送当前分支；发布、重大修复或重要回退点可以自行创建并推送语义 tag 或时间戳 tag，任务需要时也可以更新或删除本地与远端 tag。",
-          "Git 高权限只覆盖当前任务相关改动；脏工作树中的无关用户改动必须保留并排除在任务提交外，不能借自动提交、rebase、reset 或 push 擅自改写无关内容。",
-          "远端认证缺失、受保护分支拒绝、远端历史变化或冲突无法在不丢失内容的前提下自动处理时，才标记阻塞并报告证据；普通 commit、push、tag 和当前分支同步不再询问用户。",
+          "`worker`、`indexer`、`tokener` 是全局可用的工作者定义；项目级 `.codex/agents/` 优先，不存在时才回退用户级定义。",
+          "按任务选择实际参与的角色：`indexer` 处理轻量、边界明确的调查、检查和局部修改；`worker` 处理主力实现、调试、测试和较完整调查；`tokener` 处理关键 review、teacher 式指导或解除 `worker` 阻塞，默认不修改。三者不构成固定流水线，也不要求同时参与。",
+          "工作线路固定为：老板 → parent 澄清需求至可派工 → logger 与具体工作者并行。parent 派工后不介入执行细节，只接收 logger 的异常或完成报告；老板的新要求仍先由 parent 澄清。",
+          "`parent` 是当前主 Codex，不是可创建工作者：负责需求澄清、任务内容、范围、完成条件、验收证据、派工与重排；不替具体工作者执行或监督。",
+          "`logger` 是可选的低成本监督与状态记录角色：持续监督所有实际委派的工作者，不中止它们；按真实状态更新既有任务，全部完成即标记 `[x]` 并向 parent 汇报；不改任务内容、不派工、不参与业务实现或 review。",
+          "仅当 `logger` 已物化且运行时真实可创建时才可委派；否则由 parent 或当前处理者完成同一检查，不得把未物化、未创建或仅在规则中定义的 logger 记为已参与。",
+          "三个角色缺一不可：缺失、无法创建或不可用时，立即明确告知用户并停止当前工作；不得把未实际参与的工作者写入记录。",
+          "同一角色可按 parent 的实际委派并行运行多个独立实例；每个实例必须有可区分的实例标识、运行时模型标识、`exclusive ownership` 的文件或对象与已声明依赖。未实际创建的实例或角色不得记入台账，也不得把规则文本当作运行时派工能力。",
+          "并行实例的写入 ownership 不得重叠；依赖未满足、目标相同或合并验证尚未通过时，必须串行处理或将受影响项标为 `[!]`，写明冲突事实、解除条件与负责重排的 parent。合并前逐项核对依赖结果、目标文件 diff 与验收证据，禁止以口头计划替代验证。",
+          "工作者可用性以真实运行状态为准：`wait_agent` 在某个等待窗口超时或暂无新消息，只表示该窗口内没有返回，不代表 agent 不可用。`list_agents` 仍为 `running` 时必须继续等待并同步进度，不得因短等待超时主动中断、标记缺失或让其他角色兼任；只有运行时明确返回错误、agent 已终止失败或用户要求取消时才中断。",
         ],
       },
       {
-        title: "对象边界红线",
+        title: "模板服务",
         items: [
-          "前后端项目中的领域对象默认由服务端生产者作为 owner 定义；若真实生产者不是服务端，必须在实现前明确生产者、生命周期与稳定 ID 契约。",
-          "消费者层（页面、路由、组件、adapter）只能通过 ID、owner action 或只读视图 DTO 消费对象；禁止根据页面字段、请求参数或展示需要拼装、扩展、重命名领域对象。",
-          "对象 owner 不能凭语义猜测临时创建。对象只在真实目录（服务端对象目录/切片仓库）内维护；运行时配置若为该对象职责内容，统一放在 `runtimeConfig`，不得虚构 `admin` 这类泛化目录名来承载配置。",
-          "固定执行顺序：先建立服务端对象目录与切片仓库，再按当前页面的真实需要创建 action，最后实现对象路由与页面路由；禁止提前实现可能用得上的方法、类型或 DTO。",
-          "页面功能目录与服务端对象目录保持对应；组合页面可以编排多个对象，但不得成为新的对象 owner，也不得把多个对象重新拼成消费侧领域模型。",
-          "用户要求的任务一旦造成对象越界，必须先明确提醒并返回 `Boundary Check Failed`，说明越界点和建议归属；在边界修正前不得直接实现。",
-        ],
-      },
-      {
-        title: "个人 extends-* 工具库保护红线",
-        items: [
-          "`extends-*` 是用户个人长期维护、跨项目复用的独立工具库，不是当前消费项目的业务目录；独立库不等于公开库，处理接口、配置和敏感数据前必须先区分该库是对所有人公开，还是仅供用户自用的私有库，未确认时不得默认按公开库推断。",
-          "公开库不得内置用户个人敏感数据，必须通过有类型的公开契约接收调用方配置；自用私有库可以由自己的 owner 直接定义固定敏感数据，不得仅因为数据敏感就强迫改成调用方传参、环境变量或外部配置。",
-          "当前项目的真实调用无法由工具库现有能力满足时，必须立即返回 `Library Boundary Decision Required`；在用户作出选择前，禁止在工具库或消费项目新增文件、接口、wrapper、adapter、compat 层，禁止修改接口参数或任何一侧的业务逻辑。",
-          "只能先向用户并列提供“新增工具库能力”和“修改既有工具库能力”两种建议，分别说明归属、公开形态、复用价值、兼容影响、受影响消费者与验证方式；不得替用户默认选择，也不得用当前项目的临时绕行方案规避决策。",
-          "用户明确选择新增、修改或放弃后，才按选择实施；只属于依赖安装、版本归一或物理解析来源的问题可以按 scope-style 的 pnpm 冲突规则处理，但一旦需要改变 API、参数或业务语义，必须重新进入用户决策。",
-        ],
-      },
-      {
-        title: "显式配置红线",
-        items: [
-          "全局默认禁止用户维护的项目、应用、脚本和 `extends-*` 工具库读取、写入、删除、解构、枚举、代理或动态访问 `process.env`；环境变量不得成为模块、包、进程、窗口、路由、服务或业务对象之间的隐式参数、配置、状态、默认值或副作用通道。",
-          "数据是否敏感与是否使用环境变量无关：自用私有 owner 可以直接持有固定 token、密码、密钥和路径；公开 owner 使用有类型的调用契约。`envMeta` 只处理确实由宿主进程环境动态提供且无法绕开的外部协议值，不是密钥仓库，也不是隐藏私有常量的手段。",
-          "只有外部协议确实要求环境变量且无法改用有类型配置时，才允许在最小真实消费作用域建立 `envMeta`；它是语义 owner，不固定为目录或包。固定三级顺序是：单个仓库对象消费时作为该对象切片根数据的 `envMeta` 属性；同一项目或子包内多个对象消费时提升为实现根下 `envMeta` 目录；多个 pnpm 子项目消费时再提升为根目录直属 `<pnpm-root>/envMeta` workspace 子项目并由 `pnpm-workspace.yaml` 显式纳入。",
-          "只有所选层级的 `envMeta` owner 实现内部可以直接读写 `process.env`；主仓库、入口、runtime、config 子包、其他业务目录、应用、helper、wrapper、adapter、class、私有方法、测试和脚本均无例外。出现第一个真实跨边界消费点才允许向上提升，提升后必须删除低层重复 owner；移动或复制代码不构成边界修正。",
-          "`envMeta` 必须按真实环境字段提供有名称、有类型、可校验的最小公开能力；禁止暴露 `get(name: string)`、`set(name, value)`、字符串索引、任意键对象或无类型透传，禁止为了未来可能使用预留环境字段。",
-          "消费者必须通过 `envMeta` 的明确 import 和类型化字段或方法显式消费；禁止依赖导入副作用、先修改环境再让其他模块暗中读取，禁止展开、复制、继承或透传整个 `process.env`。向外部进程传递环境变量时，也只能使用 `envMeta` 按该协议明确生产的最小对象。",
-          "第三方依赖内部不可控的环境变量读写不追溯修改；调用层确实需要满足其环境变量协议时，只能显式调用 `envMeta` 的类型化能力，不得在其他位置包装或扩散隐式契约。发现 `envMeta` 以外的现有代码读写 `process.env` 时必须返回 `Implicit Configuration Boundary Failed`，指出迁入 `envMeta` 或改为显式配置的路径，在边界修正前不得继续相关实现。",
-        ],
-      },
-      {
-        title: "禁止兜底红线",
-        items: [
-          "用户的个人硬偏好是让 bug、缺项和错误立即明显暴露；可用性、兼容旧行为、调用方便、界面好看或多数环境能运行均不得优先于错误可见性。无法确定时必须失败并报告，不得选择继续运行。",
-          "禁止为了让代码看似可运行而擅自增加兜底：不得在缺少配置、输入、能力、文件、对象或真实结果时猜测替代值、备用路径、空结果、随机值、降级能力、静默重试或兼容分支。问题必须在真实 owner 或调用契约处明确解决。",
-          "缺少完成操作所必需的值时必须立即暴露失败，使用必填类型、校验错误、throw 或明确错误状态；禁止用 `??`、`||`、默认形参、catch 返回、空数组、空字符串、false、临时对象或硬编码值把失败伪装成成功。",
-          "非特殊缺省值由调用方在掌握业务语境的位置明确提供，被调用方接收已经确定的值，不得自行猜测调用方意图，也不得用 `Partial` 把必填配置整体变成可选后逐项填充默认。",
-          "只有协议、框架或领域生产者拥有的稳定不变量才允许作为被调用方默认值；必须能说明默认值的 owner、适用条件和所有调用方共享它的理由。机器路径、账号、凭据、端口、业务选择和部署差异默认不属于这种例外。",
-          "AI 无权自行批准兜底例外；例外必须来自用户本次明确授权，或任务开始前已经存在且可引用的权威协议、生产者契约与真实验证。AI 本轮新增的注释、类型、测试、文档或所谓兼容需求不能反过来证明自己新增的默认值合理。",
-          "重试、故障转移、缓存回退和 UI 空态只有在用户需求或真实协议明确要求，且具有可观察状态、退出条件和验证路径时才允许实现；不得把容错机制当作隐藏错误的通用兜底。发现无依据兜底时返回 `Fallback Boundary Failed`，先确定必填输入及其 owner，再继续实现。",
-        ],
-      },
-      {
-        title: "文本完整性红线",
-        items: [
-          "UTF-8 无 BOM、没有替换字符只代表字节格式可接受，不代表中文语义正确；错误解码后的乱码再次保存，仍可能是完全合法的 UTF-8。",
-          `涉及中文、模板、规则、Markdown、配置或大文件时，写入前必须使用 ${nodes.fileIo} 建立基线并声明目标文件和允许变化的区域；基线未通过不得写入。`,
-          "目标文件在建立基线后若被用户、编辑器或其他进程修改，基线立即失效；AI 必须停止并重新读取，不得把双方改动覆盖或拼接。",
-          "禁止使用未明确编码的读取结果、终端显示、截图、聊天复制出的乱码作为写入源；禁止猜编码、批量转码、管道回写或凭记忆重建整文件。",
-          "用户要求跳过基线、使用高风险整文件覆盖、边编辑同一目标边要求 AI 继续，或无法提供可信恢复源时，AI 必须拒绝写入并说明需要用户先完成什么。",
-          "模板只修改唯一源文件并通过生成器更新产物；禁止为了快速修复直接改生成的 `.codex`，也禁止在源文件损坏时用简化版本替换。",
-          "任一前置条件不满足时返回 `Text Integrity Check Failed`；写后验证和事故恢复只能作为兜底，不能替代修改前防护。",
-        ],
-      },
-      {
-        title: "运行约定",
-        orderedItems: [
-          "src/runtime.ts 是运行时配置，src/routers.ts 是路由汇总，src/index.ts 是入口；src/index.ts 只负责启动运行时。",
-          "pnpm workspace 项目只允许根 package.json 定义 scripts 命令入口；具体子项目不写 scripts，除非用户明确要求该子项目独立运行。该规则只约束 scripts，不禁止根 package.json 暴露真实 bin。",
-          "禁止为子项目随手增加无实际入口使用的 vite.config.ts、配置包、环境变量桥接文件、compat/adapter 或兼容套壳；需要 Vite 时由真实运行方托管和配置。",
-          "重启 extends-codex 使用 `pnpm dlx github:see7788/extends-codex restart`。",
-          "遇到可观察浏览器、查看上下文、页面观察等要求时，先检查 dev 命令是否带上 extends-codex；pnpm 项目必须在根 package.json 定义 dev 命令。",
-          "dev 未带上 extends-codex 时暂停处理，给出 dev 命令补全写法；等待 dev 重启并生成新的 .codex 后再继续。",
-          "dev 已带上 extends-codex 时，Chrome DevTools MCP 访问 HONOCODEX_ORIGIN（host=HONOCODEX_HOSTNAME，port=HONOCODEX_PORT）。"
+          "模板服务是用户级配置数据边界；普通项目不得读取或修改模板服务实现、默认源、store 或生成的 `.codex` 产物。AI 不猜测端口、服务地址或进程输出；先检查 VS Code 是否安装 `see7788.extends-codex-vscode`，未安装时明确提示用户安装。",
+          "插件已安装时，由用户通过插件启动服务；服务启动完成后会自动物化当前工作区的项目 AGENTS.md、config 和 skills。AI 不直接修改 `.codex` 产物，也不需要取得 Hono 服务地址。",
+          "页面和 MCP 更新模板时仍使用 `GET/PUT /tpl/source`、`GET /tpl/status`、`POST /tpl/materialize` 及其全局对应接口；AI 只根据插件是否存在和用户是否已启动服务决定下一步，不直接操作内部状态或生成文件。",
         ],
       },
     ],
@@ -127,16 +113,12 @@ const source: tplGlobal_t = {
   configToml: {
     mcpServers: {
       "chrome-devtools": {
-        args: ["chrome-devtools-mcp@latest"],
+        args: ["-y", "chrome-devtools-mcp@1.6.0"],
         command: "npx",
       },
       codegraph: {
-        args: ["@colbymchenry/codegraph", "serve", "--mcp"],
+        args: ["-y", "@colbymchenry/codegraph@1.4.1", "serve", "--mcp"],
         command: "npx",
-      },
-      node_repl: {
-        args: [],
-        command: "node_repl",
       },
     },
   },
@@ -213,6 +195,14 @@ const source: tplGlobal_t = {
           ],
         },
         {
+          title: "生产者、消费者与契约归属",
+          items: [
+            "跨模块、跨包、跨窗口、跨进程或对外 API 的频道名、请求、响应、状态和 bridge 类型，必须由唯一明确的生产者在其真实目录定义并导出；消费者只 import 和使用，禁止在消费者目录重新定义、复制或用 `.d.ts` 伪造同一接口。",
+            "生产者契约必须放在生产者的具体运行侧或对象目录内；不得为了目录整齐在包根或消费者侧创建 `common`、`shared`、无 owner 的 `protocol` 或平行 contract。决定文件位置前先说明生产者是谁、消费者如何取得它。",
+            "消费者自己的页面状态、view props、局部输入和内部辅助类型仍归消费者所有；本规则只约束生产者向外提供的契约，不得借此把所有类型强行集中或提取为公共模块。",
+          ],
+        },
+        {
           title: "分流规则",
           items: [
             "前端组件结构、页面交互、组件拆分、UI 临时态和样式放置使用「前端作用域」或「前端样式作用域」。",
@@ -224,16 +214,18 @@ const source: tplGlobal_t = {
         {
           title: "显式配置边界",
           items: [
-            "`process.env` 不是有类型的配置接口；除按最小真实消费作用域确定的 `envMeta` 边界外，用户维护代码不得对它执行任何读写，包括赋值、删除、解构、枚举、代理、动态键访问、`process.env.X ?? 默认值`、非空断言、类型断言或 schema 包装。",
-            "先判断值的生产方式，不以敏感性决定配置方式：自用私有包中的固定敏感值可以直接定义在真实 owner 内；公开包中的个人敏感值由有类型契约显式传入；只有值确实来自宿主进程环境且运行时可变时，才进入 `envMeta` 判断。",
-            "优先不用环境变量：编译期已知值留在所属 owner；运行时值优先由有类型 config 对象、config 子包、配置文件、CLI 参数、IPC contract 或持久化 owner 状态生产。只有确认外部协议无法绕开 `process.env` 后才建立 `envMeta`，不得把它作为所有项目或子包的默认脚手架。",
-            "`envMeta` 按真实消费边界逐级放置。第一级：只有一个仓库对象消费且生命周期跟随该对象时，放进对应对象切片仓库，作为切片根数据的 `envMeta` 属性；主仓库只组合该切片，不得为 env metadata 增加类型、常量或运行时对象。",
+            "`process.env` 不是有类型的配置接口；所有 `process` 原始读取只允许在项目唯一的 `store.ts` 或 `index.*` 受限边界发生，其他用户维护代码不得对 `process.env` 执行任何读写，包括赋值、删除、解构、枚举、代理、动态键访问、`process.env.X ?? 默认值`、非空断言、类型断言或 schema 包装。",
+            "先判断值的生产方式，不以敏感性决定配置方式：自用私有包中的固定敏感值可以直接定义在真实 owner 内；公开包中的个人敏感值由有类型契约显式传入；只有值确实来自宿主进程环境且运行时可变时，才由唯一受限边界读取、校验并转换为有类型配置，再进入 `envMeta` 判断。",
+            "优先不用环境变量：编译期已知值留在所属 owner；运行时值优先由有类型 config 对象、config 子包、配置文件、CLI 参数、IPC contract 或持久化 owner 状态生产。只有确认外部协议无法绕开 `process.env` 后，才允许唯一受限边界读取并转换为有类型配置供 `envMeta` 消费；不得把它作为所有项目或子包的默认脚手架。",
+            "默认厌恶并禁止通过 `process` 传递业务或项目参数，包括直接或间接使用 `process.argv`、`process.env`、`process.cwd()`、`process.execArgv`、`process.title` 及其包装、转发或全局读取；不得把当前进程状态伪装成调用参数。运行时值必须通过有类型 config、配置文件、公开 CLI 契约、IPC contract 或 owner 状态显式传递。",
+            "确实受外部宿主或第三方协议限制而无法避免 `process` 时，只允许在项目唯一的 `store.ts` 或 `index.*` 受限边界读取，并立即转换为有类型的项目配置；不得向其他模块继续透传 `process` 或其原始值。公开 CLI 契约只允许由项目唯一的 `index.*` 解析 `process.argv`。该例外必须在实现处说明不可替代的外部协议原因、唯一读取位置与替代方案为何不可行。",
+            "`envMeta` 按真实消费边界逐级放置，只能消费唯一受限边界已经读取、校验、转换的有类型配置，绝不得直接读取任何 `process` 原始值。第一级：只有一个仓库对象消费且生命周期跟随该对象时，放进对应对象切片仓库，作为切片根数据的 `envMeta` 属性；主仓库只组合该切片，不得为 env metadata 增加类型、常量或运行时对象。",
             "第二级：同一应用、项目或子包内已有两个及以上对象真实消费时，才从对象切片提升为该实现根下的 `envMeta` 目录，由这些对象显式 import。第三级：已有两个及以上 pnpm 子项目真实消费时，才提升为 `<pnpm-root>/envMeta` 独立 workspace 子项目并由 `pnpm-workspace.yaml` 显式纳入。",
             "作用域提升由跨越当前 owner 边界的真实消费点触发，不由未来规划、目录整齐或统一形式触发；提升时迁移唯一实现并删除原属性或目录，禁止 store、src 目录和 pnpm 根同时维护同一环境字段。普通对象 metadata 仍归对象 owner，不因采用相同作用域判断就改名为 `envMeta`。",
             "`envMeta` 只实现当前真实消费点所需字段；每个字段或动作都必须具有明确业务名称、输入输出类型、校验规则和缺失行为。禁止通用 `get/set`、`Record<string, string>`、任意字符串键、全量快照或为未来预留字段，因为这些形式会重新丢失类型提示和 owner 边界。",
-            "读取结果必须由 `envMeta` 校验、归一化后以成立的业务类型返回；写入、更新和删除必须通过有语义的类型化方法显式触发，不得在模块导入时产生写入副作用，也不得靠修改全局环境让其他用户代码随后暗中读取。",
+            "`envMeta` 只能在已接收的有类型配置范围内校验、归一化并以成立的业务类型返回；写入、更新和删除必须通过有语义的类型化方法显式触发，不得在模块导入时产生写入副作用，也不得靠修改全局环境让其他用户代码随后暗中读取。",
             "跨包、跨窗口、跨进程和跨对象的消费必须在调用关系与 TypeScript 类型中可见，使用明确 import、构造参数、对象形参、IPC contract 或 owner action。外部命令需要 env 时，由 `envMeta` 根据该命令的真实协议生产最小对象，禁止展开、复制、继承或透传整个 `process.env`。",
-            "审查或修改代码时一旦发现 `envMeta` 以外的用户代码读写 `process.env`，先停止相关实现并报告 `Implicit Configuration Boundary Failed`；确认是否能删除环境变量依赖，确实不能时再确定 `envMeta` 的字段、类型、真实消费点和验证方式，禁止只移动代码消除告警。",
+            "审查或修改代码时一旦发现项目唯一 `store.ts` 或 `index.*` 受限边界以外的用户代码读写任何 `process` 原始值，或发现 `envMeta` 直接读取 `process.env`，先停止相关实现并报告 `Implicit Configuration Boundary Failed`；确认是否能删除该依赖，确实不能时再确定唯一边界、有类型配置、`envMeta` 的字段、真实消费点和验证方式，禁止只移动代码消除告警。",
           ],
         },
         {
@@ -253,6 +245,11 @@ const source: tplGlobal_t = {
           title: "通用作用域",
           items: [
             "任何常量、类型、函数、方法、class、组件、配置、DTO、wrapper、adapter 或文件，只有在存在多个真实消费点，或自身维护独立状态、生命周期、不变量时才允许定义；否则必须内联到真实消费点。改变 private/public、class/file 或目录位置不构成复用。",
+            "单消费者 helper 文件是违规抽取，必须在同一轮并入唯一宿主 class 或模块并删除该文件；class 内仅供自身使用的方法必须标记为 `private`，模块级仅供单一 class 使用的函数不得以 helper 形式保留；零消费者 export、方法和文件必须删除，不得保留为未来复用。收纳、保留或删除前必须给出调用图证据，列出符号及全部当前消费者；无法证明两个独立真实消费者时不得创建或保留抽取。",
+            "多个 Codex source 共同消费的静态模板常量必须由真实 owner 使用普通命名 `export const` 定义，其他 source 直接 import；禁止为了让同一 source 对象访问 `nodes` 等常量而使用 IIFE、闭包参数、factory 或回调包裹对象。只有立即计算本身具有真实输入、状态或生命周期时才允许 IIFE。",
+            "新增或保留 `helper`、`utils`、`wrapper`、`adapter`、`factory`、`compose`、`withXxx`、转发函数或只负责拼接配置的模块前，必须先用 CodeGraph 列出至少两个当前真实调用点的文件路径和符号；未来可能复用、不同参数、目录整齐、测试调用和同一调用链的转发均不计数。证据不足时直接内联到唯一消费点，禁止以任何命名或 private 文件规避。",
+            "配置合并、对象包装和 API 转发同样受单点内联约束：只有两个及以上独立宿主真实消费同一合并行为时才允许库导出 helper；唯一宿主必须在自身真实入口直接组合配置和调用。",
+            "本条是阻断规则：未在本轮工作记录中给出 CodeGraph 的两个独立真实消费点证据时，不得新增、保留或改名伪装任何抽取；发现既有单点抽取时，必须在同一轮内联并删除。若无法内联，返回 `Reuse Evidence Required`，不得宣称任务完成。每次涉及此类改动的收尾前，必须逐项列出抽取名称、两个消费点文件路径和符号；缺任一项即视为验证失败。",
             "无参数 class 的实例创建若同步完成全部工作，且创建后没有独立状态、后续生命周期或第二个真实动作，必须把唯一逻辑直接放进 `constructor`，调用方只写 `new ClassName()`；禁止额外暴露只被构造后立即调用一次的 `sync`、`init`、`run`、`start` 或同义方法。只有异步动作、需要延后触发、存在多个真实调用时机，或实例创建后仍维护状态与生命周期时，才允许保留独立公开方法。",
             "具体实现前先做真实实现前置检查：确认真实输入、真实配置、真实调用路径、真实副作用和真实验证方式；缺任一关键条件时先阻塞并列缺项，不先写象征实现。",
             "真实实现：用户要求具体实现时，必须接入真实调用路径、真实配置、真实文件、真实命令或真实接口；禁止用 mock、stub、dummy、示例数据、空方法、只改状态的象征实现冒充完成。",
@@ -337,7 +334,11 @@ const source: tplGlobal_t = {
         {
           title: "pnpm 公共库与传递依赖冲突",
           items: [
+            "跨 pnpm 包消费时，代码只从包名或公开子路径 import，package.json 只以包名加 `workspace:*`（或用户明确的发布版本）声明；`file:`、`link:`、`../`、绝对路径和直接源码相对 import 一律禁止，测试、临时修复和本机可解析都不是例外。",
             "本机 `F:/pro` 下存在多个独立 pnpm 根项目，它们会通过 `../extends-*` 共同消费相邻公共库；同一个公共库可能同时成为多个根 workspace 的成员。出现冲突时先确定当前发生问题的消费项目根，不把公共库目录现有的 node_modules 当作当前项目的可靠依赖环境。",
+            "当前 pnpm workspace 内的包依赖必须使用包名加 `workspace:*`（或用户明确的 workspace 版本范围）；禁止使用 `file:`、`link:`、相对路径、绝对路径或直接源码相对 import 伪装包依赖。发现目标包在相邻目录但未被 `pnpm-workspace.yaml` 纳入时，先报告 `Workspace Membership Required`；只有用户明确将其纳入当前 workspace 后，才修改 workspace 清单并使用 `workspace:*`，绝不以 `file:` 作为兜底。",
+            "修改 package.json 的本地包依赖后，必须在消费项目根执行 `pnpm install`，再以 TypeScript 或实际构建确认解析路径；安装成功不能替代验证。最终检查必须搜索本轮涉及 package.json 中是否仍有 `file:`、`link:` 或相对路径依赖，并对每一项报告明确的外部协议例外或移除。",
+            "上述本地包规则覆盖 `dependencies`、`devDependencies`、`peerDependencies`、`optionalDependencies` 和任何 pnpm catalog/override 引用；不得以测试、开发依赖、私有包、相邻目录、临时迁移或“先跑起来”为由使用 `file:` 或相对路径。`pnpm why` 显示的解析结果 `link:` 仅可作为 `workspace:*` 的正常解析结果，绝不能成为 package.json 声明 `link:` 的理由。",
             "发现公共库与当前项目发生依赖、版本或类型冲突时，先在消费项目根执行 `pnpm why <包名> -r` 和 `pnpm list <包名> -r`，记录谁直接声明、谁经上游包引入、各处解析版本；禁止先修改业务泛型、复制框架类型或增加类型断言。",
             "先判断冲突依赖是否穿过公共库边界：公开参数、返回值、实例或导出类型包含 Hono router、Zustand StateCreator、React runtime/type、Vite plugin、TypeScript AST 等框架对象时，库和消费方必须共享兼容的依赖来源。",
             "穿过公共边界的框架依赖由消费项目决定具体运行版本；公共库使用 peerDependencies 声明兼容范围，并用 devDependencies 支持自身开发和类型检查，消费项目在 dependencies 中提供实际版本。",
@@ -374,7 +375,15 @@ const source: tplGlobal_t = {
             "页面、路由入口、私有组件文件默认使用 default export；只有跨文件实际共享的类型、schema、store 工厂、明确 API 才使用命名 export。",
             "禁止创建只包含 `export type ... from ...`、`export { ... } from ...` 或单纯转发 default 的文件；除非它是包级 public API 边界且有多个真实外部消费者。",
             "Hono 模块目录 index.ts 默认导出完整 router；store.ts 默认导出切片工厂；私有工具和私有类型不导出。",
-            "lib 库导出只写最短 `exports`，不要写啰嗦的 `types/import` 配置。",
+            "pnpm workspace 的 lib 包默认在 package.json 使用 `\"exports\": { \".\": \"./index.ts\", \"./*\": \"./*/index.ts\" }`；根包导出根 index.ts，任意子路径都导出同名目录的 index.ts，目录可以嵌套；禁止按当前文件逐项枚举或直接导出目录内的非 index.ts 文件，只有用户明确要求不同目录或公开面时才改用其他映射。",
+            "package.json 的 `exports` 只定义可解析的导入路径，不会创建默认导出或命名导出；根入口和每个目录入口的公共成员必须由对应 index.ts 实际 `export`，在消费者实际导入前通过 TypeScript 类型检查验证。",
+          ],
+        },
+        {
+          title: "TypeScript 编译范围",
+          items: [
+            "pnpm workspace 的 TypeScript lib 包在 tsconfig.json 使用 `\"include\": [\"**/*.ts\"]` 覆盖完整源码树；只有实际包含 TSX 源码时才额外纳入 `**/*.tsx`。禁止使用 `\"*.ts\"`、`\"index.ts\"`、`files` 或按当前已有文件收窄编译范围。",
+            "tsconfig.json 的 include 决定参与类型检查的源文件，package.json 的 exports 决定可导入路径，入口文件的 export 决定真实公共成员；三者必须分别完整定义，禁止因当前只有一个入口文件而遗漏任一层。",
           ],
         },
       ],
@@ -658,7 +667,7 @@ const source: tplGlobal_t = {
           title: "加载和安装",
           items: [
             "Codegraph 由生成的 config.toml 的 mcpServers.codegraph 加载，命令为 npx @colbymchenry/codegraph serve --mcp；如果当前会话没有暴露 Codegraph 工具，说明 MCP 未加载或需要重启会话，不要假装已使用。",
-            "Graphifyy 不是默认 MCP；CLI 缺失时使用 uv tool install graphifyy 安装，安装后会提供 graphify 和 graphify-mcp 命令。",
+            "Graphifyy 不是默认 MCP；只有用户明确要求安装时，才使用 uv tool install graphifyy，安装后会提供 graphify 和 graphify-mcp 命令。",
             "需要把 Graphifyy 作为 Codex skill 使用时，才执行 graphify install --platform codex；模板项目中不要手改 .codex 产物来安装 Graphifyy，应回到 source.ts 维护规则。",
           ],
         },
@@ -685,6 +694,7 @@ const source: tplGlobal_t = {
           title: "验证边界",
           items: [
             "Codegraph 负责结构上下文，不替代真实验证；改完代码后仍用 TypeScript、测试、构建、接口响应或页面观察验证行为。",
+            "涉及 IDE、浏览器、操作系统、插件宿主或第三方平台的图标、视图、命令、生命周期、权限或状态能力时，先以本地类型、官方 API 或实际实验确认能力边界；不得把推测能力当作实现承诺。",
             "rg 适合补充查找文本、配置、文档和 Codegraph 未覆盖内容；不要用 rg 重建 Codegraph 已经给出的调用关系。",
             "Graphifyy 只适合回答“仓库整体长什么样”“模块怎么连”“调用流如何可视化”的粗粒度问题；具体修改仍回到 Codegraph 和真实验证。",
           ],
@@ -692,8 +702,8 @@ const source: tplGlobal_t = {
       ],
     },
     [nodes.checklistStyle]: {
-      description: "涉及任务拆解、进度状态、阻塞同步和多阶段验证时使用。约束 checklist 触发条件、状态标记和完成表达。",
-      title: "Checklist 任务状态",
+      description: "涉及任务拆解、进度状态、阻塞同步和多阶段验证时使用。用户提到任务台账、待办事项、todolist 或 todoclick 时必须使用，并在相关文档末尾维护统一任务台账。约束触发条件、状态标记、决策记录、worker/indexer/tokener 真实 agent 命名和完成表达。",
+      title: "可审计的工作流",
       sections: [
         {
           title: "文本完整性验收",
@@ -727,9 +737,11 @@ const source: tplGlobal_t = {
         {
           title: "触发规则",
           items: [
-            "只要满足以下任一条件，必须自动拆 checklist：用户提问包含多个待解决点；预计会修改多个文件；属于批量改动；需要多阶段验证。",
-            "触发 checklist 后，先列 checklist 再动手；执行中用户问进度、状态、做到哪了时，必须补充或同步当前 checklist 状态；用户说 todolist、todo list、任务清单或清单时按 checklist 标准执行，对外表达优先沿用用户说法。",
-            "简单单点问答或单文件小改不强制使用 checklist。",
+            "在任何分析、诊断、实现或验证前，必须确认 `worker`、`indexer`、`tokener` 的项目级定义，项目级不存在时回退用户级定义；三者任一缺失、不可用或无法实际创建时，必须在“可审计的工作流”中写为 `[!]`、告知用户并立即停止；三者定义完备时，按任务选择实际参与的角色，不要求固定流水线或三者同时参与。",
+            "`可审计的工作流` 是正式名称；`任务台账`、`待办事项`、`todolist`、`todoclick`、`checklist`、`todo list` 和 `任务清单` 都是同义触发词；用户提到任一词时，必须建立或更新相关项目文档末尾的同一“可审计的工作流”，不得只在对话中输出计划或口头承诺。",
+            "跨多个阶段且需要跨会话保留进度时也应建立台账。纯粹的事实问答、解释、闲聊和只读检查在没有出现强制触发词时不修改项目文档。",
+            "任务已触发台账且用户请求允许修改对应文档时，先写台账再实施；执行中用户问进度、状态或做到哪了时，补充或同步当前 checklist 状态，对外表达优先沿用用户说法。",
+            "多阶段任务在定位并确认既有台账后、开始任何任务实质诊断或实现前，必须新增或标记对应 `[~]` 项；不得把台账留到完成后补写，确保用户始终能看到当前进度。",
           ],
         },
         {
@@ -741,24 +753,45 @@ const source: tplGlobal_t = {
         {
           title: "状态同步",
           items: [
-            "checklist 只记录当前任务的关键目标、将修改的文件或阶段、必要验证项。",
+            "台账默认以可独立验收的交付物为一行，不拆成普通实现步骤；仅在取得真实结果、出现阻塞或需要用户确认时同步对话与 checklist 状态：`[?]` 待确认，`[ ]` 待办，`[~]` 进行中，`[x]` 已完成，`[!]` 阻塞。",
+            "可审计的工作流是可循环追溯的记录：新建或纠正未完成项时，已参与的条目同一行按时间顺序记录实际参与者的角色、运行时实际模型标识、分析问题与已证实证据、需要的解决方式、实施处理与验收结果；每个阶段只记录真实参与的 agent 和实际动作。尚未开始的待办只写计划责任角色（待分派 worker/tokener），不得伪装为已参与。运行时没有提供模型标识时写模型标识未提供，不得用模板配置或推测替代。既有已完成历史项保持原样，除非用户明确要求重写。",
+            "文档中的正式标题固定为 `## 可审计的工作流 [?] 待确认、[ ] 待办、[~] 进行中、[x] 已完成、[!] 阻塞`。每项使用单独一行的无序列表，以状态符号开头并用正常语句说明任务、涉及范围和完成依据；不强制拆成固定字段。完成项必须在同一行写明真实验证证据。",
+            "每条任务在状态符号后只记录该独立交付物实际参与的 agent 角色与运行时实际模型标识，以及该角色的真实结果。`indexer` 的轻量调查、检查或局部修改，`worker` 的实现、调试、测试或较完整调查，`tokener` 的关键 review、teacher 式指导或解除阻塞，均按实际参与分别记录；`tokener` 默认不修改。它们不构成固定流水线，也不要求同时出现在同一条；只有同一独立交付物确实经历多个阶段时，才按时间顺序同一行记录。",
+            "同一角色有多个独立实例并行时，每项还要记录实例标识、运行时模型标识、exclusive 文件或对象 ownership、前置依赖与合并验证结果；未实际 spawn 的角色或实例不得记账。写入 ownership 重叠、依赖未满足或合并验证失败时，必须串行化或标为 `[!]`，在同一行写明冲突事实、解除条件与 parent 的重排责任。",
+            "工作线路固定为：老板 → parent 澄清需求至可派工 → logger 与具体工作者并行。parent 写清任务内容、范围、完成条件和验收证据后派工，不介入执行细节；logger 持续监督工作者、不停止它们，按真实状态更新既有任务，全部完成即标记 `[x]` 并向 parent 汇报。",
+            "用户打断时兼容任务可继续，冲突任务由 parent 重排；logger 报告中断、阻塞、冲突和未续排。",
+            "不得把配置文件、工具、MCP 或推测角色伪装成 agent，也不得把未实际参与的角色记入条目。",
+            "agent 后使用自然动作词描述事实，例如 `worker 处理`、`indexer 检查`、`tokener review`、`worker 解决`；状态符号表示任务状态，动作词不替代状态。任务交接时在同一行写真实的 agent 变更，不得预先编造尚未参与的 agent。",
+            "用户可以用当前文档行号引用任务；收到行号后先重新读取当前文件，用当前行号和该行内容共同定位。行号会随文档编辑变化，不把旧行号当作永久任务 ID。",
+            "需要用户选择，或存在会实质影响范围、验收、对外副作用、数据处理或是否回滚的关键歧义时，把任务标为 `[?]`，并在同一行写 `待确认 D-001：需要确认的事实；建议方案与理由`。确认后将 `待确认` 改为 `确认`，再把任务改为 `[ ]`，立即实施时改为 `[~]`；不依赖该确认的工作继续推进。",
+            "外部条件或真实错误导致无法继续时使用 `[!]`，并在同一行写 `阻塞原因 B-001：原因；解除条件`；`[x]` 只用于实施完成且验收通过的任务，不能因为决策完成就标记完成。",
+            "已触发台账时，先定位项目既有可审计的工作流；实施前按一行一项的自然描述写入本轮待办，包含已知目标、涉及范围和完成依据，并将当前执行项标为 `[~]`。只读检查、解释性任务或未获文档写入授权时使用对话计划，不得为了记录进度擅自修改项目文档。",
+            "用户在已触发台账的任务中追加或纠正需求时，只改写与该纠正明确对应的未完成项；已完成项和其他无关未完成项保持原样。只有用户明确取消某项时才删除；重新读取台账后不得补回或继续实施。已有代码改动不自动回滚，回滚必须由用户明确要求。",
             "触发 checklist 时，默认最后一项是“文档与源码对齐”；如果任务不涉及文档、公开说明或生成模板，同步状态时说明不需要文档变更。",
-            "执行中按需同步 checklist 状态：`[ ]` 未开始，`[~]` 进行中，`[x]` 已完成，`[!]` 被阻塞。",
-            "长任务每到一个已真实验证通过且可独立回退的里程碑，自动创建只包含该里程碑改动的 Git commit，并按 AGENTS.md「Git 自动执行权限」同步当前分支和有价值的 tag；不再为 commit、push、tag 等当前分支操作单独请求确认。",
+            "触发 checklist 的多阶段任务必须在项目文档中的“可审计的工作流”维护计划、进度、验证与未完成项；已有 README、TODO 或任务规范时沿用，未提供时在与任务最相关的 README 或项目说明中创建该章节。可审计的工作流固定放在所选文档末尾，并在章节前使用独立 Markdown 分割线 `---` 与正文分开；每项保持单行自然描述，需要决策或发生阻塞时在同一行写清建议方案、原因和解除条件。",
+            "用户要求保持、持续运行或配合观察开发进程、服务、MCP、窗口或浏览器时，必须立刻把它作为独立的 `[~]` 台账项：记录进程或服务名称、真实可观察入口、当前已观察状态和退出条件。除非用户明确要求，禁止为了构建、验证、方便重启或收尾而停止、替换或静默重启该进程；代码项完成不等于这项持续运行态任务完成。",
+            "用户要求“可观察 MCP”或其他真实运行态协作时，每次涉及该运行态的实现、验证或进度汇报前，必须从指定 MCP、真实进程、真实接口、DevTools 或页面 bridge 重新取得当前状态，并把观察结果与仍未覆盖的用户动作同步到项目台账。静态源码、旧观察、构建成功、日志存在、推测页面状态或伪造快照均不构成运行态观察；没有最新观察不得宣称该运行态正常或关闭对应 `[~]` 项。",
+            "执行期间在对话中同步已验证的里程碑、当前进行项和新暴露的阻塞；回复不能替代文档台账，台账也不能替代对当前执行状态的响应。",
+            "Git commit、push 和 tag 只在当前用户请求或当前项目明确授权的范围内执行；不得把用户级通用模板当作外部写入授权。长任务的里程碑应保持可独立验证和回退，但未获授权时只报告建议提交点。",
             "只有 checklist 目标项都处理完并完成必要验证后，才使用“完成了”“已处理完”等收工表达；阻塞时明确卡在哪项和下一步需要什么。",
+            "代码存在、台账已写、构建通过、产物已生成或日志出现都不等于用户可见交付完成；涉及安装、窗口、图标、浏览器、进程或页面状态时，`[x]` 必须同时记录对应真实环境中的最新观察证据。",
+            "用户打断、指出方向错误或要求还原时，先停止旧方向并在台账更新未完成项；对外说明已经修改的范围、仍在运行的 Agent 自建资源及是否需要用户明确授权回滚，再执行新方向。",
+            "工作者可用性以真实运行状态为准：`wait_agent` 在某个等待窗口超时或暂无新消息，只表示该窗口内没有返回，不代表 agent 不可用。`list_agents` 仍为 `running` 时必须继续等待并同步进度，不得因短等待超时主动中断、标记缺失或让其他角色兼任；只有运行时明确返回错误、agent 已终止失败或用户要求取消时才中断。",
           ],
         },
         {
           title: "收尾检查",
           items: [
             "每轮工作收尾前必须检查本轮是否有被用户打断、中途暴露、计划中列出但未完成的事项。",
-            "未完成事项能继续处理就继续处理；不能处理时记录到根目录 TODO.md，并写清阻塞原因、下一步动作和相关文件。",
-            "重复 `new TplGlobal()` 不应被视为异常；允许在一个进程内多次创建实例。同步逻辑若依赖模板边界或 configToml，必须是幂等的，不可把实例状态作为隐式副作用横向污染下一实例。",
-            "用户批评实现虚假、不是用户习惯、过度工程化、单点调用、先猜测复用或不符合 .codex 时，先定位当前模板应修改的位置：`F:\\\\pro\\\\extends-codex\\\\honoapp\\\\src\\\\tpl\\\\source.ts` 的 agentsMd、对应 skill 名、section 标题；给出应新增或改写的具体规则，再继续修正当前代码。",
+            "本轮仅在 `logger` 已物化且运行时真实可创建时委派它；收尾或暂停前它汇报未完成任务或标记已满足完成条件的任务为 `[x]`。parent 处理报告并在需要时重排。",
+            "未完成事项能继续处理就继续处理；不能处理时更新项目文档中的可审计的工作流，写清阻塞原因、下一步动作和相关文件；不得只散落在回复里。",
+            "重复创建 `CodexOutput({ path, source })` 并物化同一目标不应被视为异常；用户级与项目级输出都必须幂等，不可把实例状态作为隐式副作用横向污染下一实例。",
+            "用户批评模板或规则不符合习惯时，先判断是否属于当前模板数据；通过模板服务接口读取、更新、物化并验证，不读取或改写模板服务实现、默认源或生成产物。给出对应接口、skill 名、section 标题和具体规则，再继续修正当前任务。",
             "被批评后禁止只解释原因或只道歉；必须输出“应补约束位置 + 具体约束文本 + 当前代码修正动作”。",
             "收尾回复必须标注实现状态：已真实接线并验证、已接线未验证、未接线等待信息、被阻塞；禁止把未验证或未接线内容表述为完成。",
             "临时诊断 route、helper、日志和详细响应在创建时必须同时标记退出条件；事实确认后立即删除，除非能指出长期真实消费点，禁止以调试可能有用为由永久保留。",
-            "如果项目已有明确 TODO 文件或任务规范，沿用既有规范；没有时使用根目录 TODO.md，不把未完成事项散落在回复里。",
+            "项目明确采用根目录 TODO.md 时才在其中记录未完成事项；否则沿用或创建项目文档中的可审计的工作流，不额外制造平行待办文件。",
+            "Agent 为测试创建的进程、GUI 窗口、浏览器、临时 profile、端口或目录必须记录 owner、可识别标记和退出条件，并与用户实例隔离；收尾或切换任务时只清理已确认由 Agent 创建的资源，禁止为方便而结束用户进程、使用宽泛匹配或清理不明资源。",
           ],
         },
       ],
@@ -793,9 +826,9 @@ const source: tplGlobal_t = {
               "    ├── source.ts            # 模板源",
               "    │   ├── nodes            # 生成产物共享常量",
               "    │   └── tpl              # .codex 生成模板",
-              "    └── store.ts             # 模板渲染",
-              "        ├── codexRender()    # 调用../tpl/source.nodes渲染 .codex 文件集合",
-              "        └── skillRender()    # 渲染单个 skill",
+              "    └── output.ts            # CodexOutput 输出边界",
+              "        ├── filesStatus()    # 检查目标文件存在与脏状态",
+              "        └── materialize()    # 将模板源物化为 .codex 输出",
             ].join("\n"),
           },
         },
@@ -837,7 +870,7 @@ const source: tplGlobal_t = {
           code: {
             language: "powershell",
             content: [
-              "node -e \"const fs=require('fs'),c=require('crypto'),{TextDecoder}=require('util');const b=fs.readFileSync(process.argv[1]);let valid=true;try{new TextDecoder('utf-8',{fatal:true}).decode(b)}catch{valid=false}const s=b.toString('utf8');console.log({bytes:b.length,lines:s.split(String.fromCharCode(10)).length,sha256:c.createHash('sha256').update(b).digest('hex'),utf8Valid:valid,bom:b.subarray(0,3).toString('hex')==='efbbbf',replacement:s.includes(String.fromCharCode(0xfffd))})\" $path",
+              "$pathBase64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$path));node -e \"const fs=require('fs'),c=require('crypto'),{TextDecoder}=require('util');const p=Buffer.from('$pathBase64','base64').toString('utf8'),b=fs.readFileSync(p);let valid=true;try{new TextDecoder('utf-8',{fatal:true}).decode(b)}catch{valid=false}const s=b.toString('utf8');console.log({bytes:b.length,lines:s.split(String.fromCharCode(10)).length,sha256:c.createHash('sha256').update(b).digest('hex'),utf8Valid:valid,bom:b.subarray(0,3).toString('hex')==='efbbbf',replacement:s.includes(String.fromCharCode(0xfffd))})\"",
               "git status --short -- $path",
               "git diff --numstat -- $path",
             ].join("\n"),
@@ -885,66 +918,5 @@ const source: tplGlobal_t = {
     },
   },
 };
-export default class TplGlobal {
-  constructor() {
-    const codexPath = join(homedir(), ".codex");
-    const agentsPath = join(codexPath, "AGENTS.md");
-    const agentsCurrent = existsSync(agentsPath) ? readFileSync(agentsPath, "utf8") : "";
-    const agentsStart = "<!-- extends-codex-global:start -->";
-    const agentsEnd = "<!-- extends-codex-global:end -->";
-    const agentsStartIndex = agentsCurrent.indexOf(agentsStart);
-    const agentsEndIndex = agentsCurrent.indexOf(agentsEnd);
-    if ((agentsStartIndex === -1) !== (agentsEndIndex === -1) || agentsEndIndex < agentsStartIndex) {
-      throw new Error(`Invalid extends-codex block in ${agentsPath}`);
-    }
-    const agentsBlock = `${agentsStart}\n${agentsMdRender(source)}${agentsEnd}`;
-    const agentsNext = agentsStartIndex === -1
-      ? `${agentsCurrent}${agentsCurrent && !agentsCurrent.endsWith("\n") ? "\n" : ""}${agentsCurrent ? "\n" : ""}${agentsBlock}\n`
-      : `${agentsCurrent.slice(0, agentsStartIndex)}${agentsBlock}${agentsCurrent.slice(agentsEndIndex + agentsEnd.length)}`;
 
-    const configPath = join(codexPath, "config.toml");
-    const configCurrent = existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
-    const configNewline = configCurrent.includes("\r\n") ? "\r\n" : "\n";
-    const configLines = configCurrent.split(/\r?\n/);
-    let configNext = configCurrent;
-    for (const [name, server] of Object.entries(source.configToml.mcpServers)) {
-      const table = `[mcp_servers.${name}]`;
-      if (configLines.some(line => [table, `[mcp_servers.${JSON.stringify(name)}]`].includes(line.trim()))) {
-        continue;
-      }
-      const block = [
-        table,
-        `command = ${JSON.stringify(server.command)}`,
-        ...(server.args ? [`args = ${JSON.stringify(server.args)}`] : []),
-        "",
-      ].join(configNewline);
-      configNext = `${configNext}${configNext && !configNext.endsWith("\n") ? configNewline : ""}${configNext.trim() ? configNewline : ""}${block}`;
-    }
-
-    const skills = Object.entries(source.skills).map(([dir, skill]) => {
-      const path = join(codexPath, "skills", dir, "SKILL.md");
-      const marker = "<!-- extends-codex-global-skill -->";
-      const content = `${marker}\n${skillRender({ dir, skill })}`;
-      const current = existsSync(path) ? readFileSync(path, "utf8") : undefined;
-      if (current !== undefined && current !== content && !current.startsWith(`${marker}\n`)) {
-        throw new Error(`Global skill is owned by another source: ${path}`);
-      }
-      return { content, current, path };
-    });
-
-    if (agentsNext !== agentsCurrent) {
-      mkdirSync(dirname(agentsPath), { recursive: true });
-      writeFileSync(agentsPath, agentsNext, "utf8");
-    }
-    if (configNext !== configCurrent) {
-      mkdirSync(dirname(configPath), { recursive: true });
-      writeFileSync(configPath, configNext, "utf8");
-    }
-    for (const skill of skills) {
-      if (skill.content !== skill.current) {
-        mkdirSync(dirname(skill.path), { recursive: true });
-        writeFileSync(skill.path, skill.content, "utf8");
-      }
-    }
-  }
-}
+export default source;

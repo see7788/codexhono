@@ -1,7 +1,9 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import store from "../store";
-export default new Hono().basePath("/chat")
+
+export default function chatRouterCreate() {
+  return new Hono().basePath("/chat")
   .get("/state", (ctx) => {
     return ctx.json(store.getState().chat);
   })
@@ -10,7 +12,7 @@ export default new Hono().basePath("/chat")
     store.setState(state => {
       state.chat = chat;
     });
-    store.getState().chatActions.defFactoryReplace()
+    store.getState().chatActions.defFactoryReplace({ workspacePath: store.getState().runtimeAction.workspacePathGet() })
     return ctx.body(null, 200);
   })
   .get("/llm/openai", (ctx) => {
@@ -86,9 +88,10 @@ export default new Hono().basePath("/chat")
     });
   })
   .get("/agent/codexcli", (ctx) => {
-    return ctx.json(store.getState().chatActions.agent.codexcli.defConfig());
+    return ctx.json(store.getState().chatActions.agent.codexcli.defConfig({ workspacePath: store.getState().runtimeAction.workspacePathGet() }));
   })
   .post("/agent/codexcli", zValidator("json", store.getState().chatActions.inputSchema), (ctx) => {
     const { prompt } = ctx.req.valid("json");
-    return store.getState().chatActions.agent.codexcli.defChat({prompt})
-  })
+    return store.getState().chatActions.agent.codexcli.defChat({ prompt, workspacePath: store.getState().runtimeAction.workspacePathGet() })
+  });
+}

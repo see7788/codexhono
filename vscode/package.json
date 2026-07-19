@@ -1,0 +1,63 @@
+{
+  "name": "extends-codex-vscode",
+  "version": "0.2.0",
+  "publisher": "see7788",
+  "displayName": "extends-codex",
+  "description": "在当前工作区启动 extends-codex 服务。",
+  "icon": "src/media/icon.png",
+  "categories": [
+    "Other"
+  ],
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "files": [
+    "dist/index.js",
+    "src/media/icon.png",
+    "src/media/icon-activity.png"
+  ],
+  "engines": {
+    "vscode": "^1.120.0"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": ["workspace"],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "extends-codex",
+          "title": "extends-codex",
+          "icon": "src/media/icon-activity.png"
+        }
+      ]
+    },
+    "views": {
+      "extends-codex": [
+        {
+          "id": "extendsCodex.status",
+          "name": "服务状态",
+          "visibility": "collapsed"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "extendsCodex.serviceToggle",
+        "title": "切换 extends-codex 服务"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsup",
+    "package": "pnpm run build && vsce package --no-dependencies --out extends-codex.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.40",
+    "@types/vscode": "1.120.0",
+    "@vscode/vsce": "3.6.2",
+    "tsup": "8.5.1",
+    "typescript": "5.9.3"
+  }
+}

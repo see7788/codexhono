@@ -9,6 +9,7 @@ const pages = {
   file: lazy(() => import("./file")),
   email: lazy(() => import("./email")),
 };
+const TplGlobalPage = lazy(() => import("./tpl/global"));
 const items=Object.keys(pages).map(key=>({key,label:key}))
 const Layout: FC = () => {
   const location = useLocation();
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="sse/*" element={<pages.sse />} />
           <Route path="chat" element={<pages.chat />} />
           <Route path="tpl" element={<pages.tpl />} />
+          <Route path="tpl/global" element={<TplGlobalPage />} />
           <Route path="file" element={<pages.file />} />
           <Route path="email" element={<pages.email />} />
         </Route>

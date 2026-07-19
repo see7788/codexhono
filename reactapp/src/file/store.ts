@@ -1,5 +1,5 @@
 import { hc, type InferResponseType } from "hono/client";
-import immerStateCreator from "extends-zustand/src/immerStateCreator";
+import immerStateCreator from "extends-zustand/immerStateCreator";
 import type { Key } from "react";
 import type FileRouter from "honoapp/src/file";
 

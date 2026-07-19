@@ -1,6 +1,7 @@
 injectWorkspacePackages: true
 
 packages:
+  - "vscode"
   - "honoapp"
   - "reactapp"
   - "preloads/*"

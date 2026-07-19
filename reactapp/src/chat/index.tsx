@@ -5,9 +5,9 @@ import { Drawer } from "extends-antd/src/Drawer";
 import { hc } from "hono/client";
 import { useEffect, useRef, useState } from "react";
 import type { editor } from "monaco-editor";
-import type chatRouter from "honoapp/src/chat";
+import type chatRouterCreate from "honoapp/src/chat";
 
-const client = hc<typeof chatRouter>(location.origin);
+const client = hc<ReturnType<typeof chatRouterCreate>>(location.origin);
 const editorOptions = {
   automaticLayout: true,
   minimap: { enabled: false },

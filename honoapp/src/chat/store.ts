@@ -1,11 +1,11 @@
 import OpenAI, { APIPromise, } from "openai";
 import { Codex, Thread } from "@openai/codex-sdk";
 import type { Stream } from "openai/core/streaming";
-import immerStateCreator from "extends-zustand/src/immerStateCreator";
-import runtime from "../runtime";
 import { Hono } from "hono";
 import { hc } from "hono/client";
 import { z } from "zod";
+import type { StateCreator } from "zustand";
+import type { Store } from "../store";
 const stateSchema = z.object({
   llm: z.record(z.string(), z.object({
     protocols: z.array(z.enum(["openai", "anthropic"])),
@@ -23,13 +23,13 @@ const testSchema = z.object({
   model: z.string().min(1),
   prompt: z.string().min(1),
 }).strict();
-type Store = {
+export type ChatStore = {
   chat: z.infer<typeof stateSchema>,
   chatActions: {
     stateSchema: typeof stateSchema
     inputSchema: typeof inputSchema
     testSchema: typeof testSchema
-    defFactoryReplace: () => void,
+    defFactoryReplace: (input: { workspacePath: string }) => void,
     llm: {
       openai: {
         defConfig: () => {
@@ -40,7 +40,7 @@ type Store = {
           agents: Array<"codexcli">,
           defaultHeaders: Record<string, string>,
         },
-        defChat: (op: { prompt: string }) => Response
+        defChat: (input: { prompt: string }) => Response
         test: (input: { baseURL: string, model: string, prompt: string }) => APIPromise<Stream<OpenAI.Chat.Completions.ChatCompletionChunk>>,
       },
       anthropic: {
@@ -51,13 +51,13 @@ type Store = {
           protocols: Array<"openai" | "anthropic">,
           agents: Array<"codexcli">,
         },
-        defChat: (op: { prompt: string }) => Response
+        defChat: (input: { prompt: string }) => Response
         test: (input: { baseURL: string, model: string, prompt: string }) => Promise<string>,
       },
     }
     agent: {
       codexcli: {
-        defConfig: () => {
+        defConfig: (input: { workspacePath: string }) => {
           apiKey: string,
           baseURL: string,
           model: string,
@@ -66,12 +66,12 @@ type Store = {
           workingDirectory: string,
           codexcli: z.infer<typeof stateSchema>["codexcli"],
         },
-        defChat: (op: { prompt: string }) => Response
+        defChat: (input: { prompt: string; workspacePath: string }) => Response
       },
     }
   }
 };
-export default immerStateCreator<Store>((set, get) => {
+export default ((set, get) => {
   const llmopenaiConfig = () => {
     const entry = Object.entries(get().chat.llm)
       .find(([, config]) => config.protocols.includes("openai") && config.apikeys[0] && config.models[0]);
@@ -182,7 +182,7 @@ export default immerStateCreator<Store>((set, get) => {
     if (!apiKey) throw new Error(`${baseURL} apiKey is not configured`);
     return llmanthropicRequest(baseURL, apiKey, model, prompt);
   }
-  const codexcliConfig = () => {
+  const codexcliConfig = ({ workspacePath }: { workspacePath: string }) => {
     const { llm, codexcli } = get().chat
     const entry = Object.entries(llm)
       .find(([, config]) => config.agents.includes("codexcli"));
@@ -199,29 +199,21 @@ export default immerStateCreator<Store>((set, get) => {
       model,
       modelProvider: "honocodex" as const,
       wireApi: "responses" as const,
-      workingDirectory: runtime.WORKSPACE_PATH,
+      workingDirectory: workspacePath,
       codexcli,
     };
   }
-  const agentAodexcliFactory = () => {
-    const config = codexcliConfig();
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter((item): item is [string, string] => item[1] !== undefined),
-    );
+  const agentAodexcliFactory = (input: { workspacePath: string }) => {
+    const config = codexcliConfig(input);
     const obj = new Codex({
-      env: {
-        ...env,
-        OPENAI_API_KEY: config.apiKey,
-        OPENAI_BASE_URL: config.baseURL,
-        HONOCODEX_CODEXCLI_API_KEY: config.apiKey,
-      },
+      apiKey: config.apiKey,
       config: {
         model_provider: config.modelProvider,
         model_providers: {
           honocodex: {
             name: "HonoCodex",
             base_url: config.baseURL,
-            env_key: "HONOCODEX_CODEXCLI_API_KEY",
+            env_key: "CODEX_API_KEY",
             wire_api: config.wireApi,
           },
         },
@@ -245,7 +237,11 @@ export default immerStateCreator<Store>((set, get) => {
     llm: {},
     agent: {}
   }
-  const defChat: Record<"openai" | "anthropic" | "codexcli", (op: { prompt: string }) => Response> = {
+  const defChat: {
+    anthropic: (input: { prompt: string }) => Response;
+    codexcli: (input: { prompt: string; workspacePath: string }) => Response;
+    openai: (input: { prompt: string }) => Response;
+  } = {
     openai: ({ prompt }) => {
       const encoder = new TextEncoder();
       return new Response(new ReadableStream<Uint8Array>({
@@ -304,7 +300,7 @@ export default immerStateCreator<Store>((set, get) => {
         },
       });
     },
-    codexcli: ({ prompt }) => {
+    codexcli: ({ prompt, workspacePath }) => {
       const encoder = new TextEncoder();
       return new Response(new ReadableStream<Uint8Array>({
         async start(controller) {
@@ -313,7 +309,7 @@ export default immerStateCreator<Store>((set, get) => {
           };
           try {
             if (!defFactory.agent.codexcli) {
-              defFactory.agent.codexcli = agentAodexcliFactory()
+              defFactory.agent.codexcli = agentAodexcliFactory({ workspacePath })
             }
             const { events } = await defFactory.agent.codexcli(prompt);
             const messageTexts = new Map<string, string>();
@@ -353,10 +349,10 @@ export default immerStateCreator<Store>((set, get) => {
       stateSchema,
       testSchema,
       inputSchema,
-      defFactoryReplace: () => {
+      defFactoryReplace: ({ workspacePath }) => {
         defFactory.llm.openai = llmopenaiFactory()
         defFactory.llm.anthropic = llmanthropicFactory()
-        defFactory.agent.codexcli = agentAodexcliFactory()
+        defFactory.agent.codexcli = agentAodexcliFactory({ workspacePath })
       },
       llm: {
         openai: {
@@ -453,4 +449,4 @@ export default immerStateCreator<Store>((set, get) => {
 
     },
   };
-})
+}) satisfies StateCreator<Store, [["zustand/immer", never]], [], ChatStore>;

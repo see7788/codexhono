@@ -1,10 +1,11 @@
 import Editor from "@monaco-editor/react";
-import { CloseOutlined, DeleteOutlined, SaveOutlined, SplitCellsOutlined } from "@ant-design/icons";
+import { CloseOutlined, SaveOutlined, SplitCellsOutlined } from "@ant-design/icons";
 import { Button, Dropdown, FloatButton, message, Tooltip } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type * as Monaco from "monaco-editor";
 import type { editor } from "monaco-editor";
-import type { Tpl } from "honoapp/src/tpl/source";
+import type { Tpl } from "honoapp/src/tpl";
 import ExtendsDrawer from "./ExtendsDrawer";
 import appStore from "../store";
 import initTplMonaco from "./monaco";
@@ -50,26 +51,17 @@ const renderSection = (item: Tpl["agentsMd"]["sections"][number]) => [
   ...(item.code ? ["", `\`\`\`${item.code.language}`, item.code.content, "```"] : []),
 ].filter(value => value !== undefined).join("\n");
 const renderAgentsMd = (tpl: Tpl) => `${tpl.agentsMd.sections.map(renderSection).join("\n\n")}\n`;
-const renderMcpServer = (name: string, server: NonNullable<Tpl["configToml"]["mcpServers"]>[string]) => [
-  `[mcp_servers.${name}]`,
-  `command = ${JSON.stringify(server.command)}`,
-  ...(server.args ? [`args = ${JSON.stringify(server.args)}`] : []),
-  "",
-];
-const renderMcpServers = (tpl: Tpl) =>
-  Object.entries(tpl.configToml.mcpServers ?? {}).flatMap(([name, server]) => renderMcpServer(name, server));
 const renderConfigToml = (tpl: Tpl) => [
-  ...(tpl.configToml.developerInstructions ? [
-    `developer_instructions = ${JSON.stringify(tpl.configToml.developerInstructions.join("\n"))}`,
-    "",
-  ] : []),
+  "[shell_environment_policy]",
+  `inherit = ${JSON.stringify(tpl.configToml.shellEnvironmentPolicy.inherit)}`,
+  `exclude = ${JSON.stringify(tpl.configToml.shellEnvironmentPolicy.exclude)}`,
+  "",
   "[features]",
   `hooks = ${tpl.configToml.features.hooks}`,
   "",
-  ...renderMcpServers(tpl),
-  ...tpl.configToml.hooks.UserPromptSubmit.flatMap(hook => ["[[hooks.UserPromptSubmit]]", `type = ${JSON.stringify(hook.type)}`, `command = ${JSON.stringify(hook.command)}`, `timeout = ${hook.timeout}`, ""]),
-  ...tpl.configToml.hooks.Stop.flatMap(hook => ["[[hooks.Stop]]", `type = ${JSON.stringify(hook.type)}`, `command = ${JSON.stringify(hook.command)}`, `timeout = ${hook.timeout}`, ""]),
-].join("\n");
+  ...tpl.configToml.hooks.UserPromptSubmit.flatMap(hook => ["[[hooks.UserPromptSubmit]]", `hooks = [{ type = ${JSON.stringify(hook.type)}, command = ${JSON.stringify(hook.command)}, timeout = ${hook.timeout} }]`, ""]),
+  ...tpl.configToml.hooks.Stop.flatMap(hook => ["[[hooks.Stop]]", `hooks = [{ type = ${JSON.stringify(hook.type)}, command = ${JSON.stringify(hook.command)}, timeout = ${hook.timeout} }]`, ""]),
+].join("\n").trimEnd() + "\n";
 const renderSkill = (dir: string, skill: Tpl["skills"][string]) => [
   "---",
   `name: ${JSON.stringify(dir)}`,
@@ -228,7 +220,7 @@ const runtimeNodeChangeAllowed = (previous: string, changes: editor.IModelConten
 };
 
 export default function CodexTplPage() {
-  const existingTargets = appStore(state => state.tpl.existingTargets);
+  const navigate = useNavigate();
   const loading = appStore(state => state.tpl.loading);
   const source = appStore(state => state.tpl.source);
   const sourceSaveStatus = appStore(state => state.tpl.sourceSaveStatus);
@@ -238,8 +230,7 @@ export default function CodexTplPage() {
   const sourceSave = appStore(state => state.tplActions.sourceSave);
   const sourceSaveStatusChange = appStore(state => state.tplActions.sourceSaveStatusChange);
   const sourceSaveTickNext = appStore(state => state.tplActions.sourceSaveTickNext);
-  const targetDelete = appStore(state => state.tplActions.targetDelete);
-  const targetPut = appStore(state => state.tplActions.targetPut);
+  const outputMaterialize = appStore(state => state.tplActions.outputMaterialize);
   const [target, setTarget] = useState("agentsMd");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [sourceFontSize, setSourceFontSize] = useState(12);
@@ -357,7 +348,6 @@ export default function CodexTplPage() {
     const skill = tpl.skills[dir];
     return skill ? renderSkill(dir, skill) : `skill not found: ${dir}`;
   }, [target, tpl]);
-  const targetExists = existingTargets.includes(target);
   const zoomSource = (event: React.WheelEvent) => {
     if (!event.ctrlKey) return;
     event.preventDefault();
@@ -409,20 +399,11 @@ export default function CodexTplPage() {
   const putFile = async () => {
     try {
       if (typeof tpl !== "object") throw new Error(tpl);
-      await targetPut(target, preview);
+      await outputMaterialize();
       message.success("修改成功");
     } catch (error) {
       console.error(error);
       message.error(error instanceof Error ? error.message : "修改失败");
-    }
-  };
-  const deleteFile = async () => {
-    try {
-      await targetDelete(target);
-      message.success("删除成功");
-    } catch (error) {
-      console.error(error);
-      message.error(error instanceof Error ? error.message : "删除失败");
     }
   };
   const edit = (
@@ -548,11 +529,6 @@ export default function CodexTplPage() {
       <Tooltip title="保存">
         <Button type="text" icon={<SaveOutlined />} loading={loading} onClick={putFile} />
       </Tooltip>
-      {targetExists && (
-        <Tooltip title="删除">
-          <Button type="text" danger icon={<DeleteOutlined />} loading={loading} onClick={deleteFile} />
-        </Tooltip>
-      )}
       <Tooltip title="关闭">
         <Button type="text" icon={<CloseOutlined />} onClick={() => setPreviewOpen(false)} />
       </Tooltip>
@@ -587,15 +563,17 @@ export default function CodexTplPage() {
       {edit}
       {previewOpen && demo}
       {!previewOpen && (
-        <FloatButton
-          icon={<SplitCellsOutlined />}
-          shape="square"
-          tooltip="预览"
-          onClick={() => {
-            syncTargetFromCursor();
-            setPreviewOpen(true);
-          }}
-        />
+        <FloatButton.Group shape="square">
+          <FloatButton
+            icon={<SplitCellsOutlined />}
+            tooltip="预览"
+            onClick={() => {
+              syncTargetFromCursor();
+              setPreviewOpen(true);
+            }}
+          />
+          <FloatButton tooltip="切换到用户级全局模板" onClick={() => navigate("/tpl/global")}>global</FloatButton>
+        </FloatButton.Group>
       )}
     </div>
   );
