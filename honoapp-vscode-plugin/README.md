@@ -1,6 +1,6 @@
-# extends-codex
+# honoapp-vscode-plugin
 
-在当前 VS Code 工作区打开 `extends-codex` 抽屉时启动服务，隐藏或关闭抽屉时停止服务。
+`honoapp-vscode-plugin` 是 `extends-codex` 的 VS Code 插件项目：在当前工作区打开抽屉时启动服务，隐藏或关闭抽屉时停止服务。
 
 ## 当前版本
 

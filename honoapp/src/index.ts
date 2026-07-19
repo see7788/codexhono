@@ -14,7 +14,11 @@ export async function serviceStart(input: { workspacePath: string }) {
   resolve(input.workspacePath).replace(/^([a-z]):/, (_, drive: string) => `${drive.toUpperCase()}:`);
   privateHostnameGet();
   let port = 3000;
-  store.getState().globalTplActions.outputMaterialize();
+  try {
+    store.getState().globalTplActions.outputMaterialize();
+  } catch (error) {
+    console.warn(`Global Codex materialization deferred: ${error instanceof Error ? error.message : error}`);
+  }
   const routers = await routersCreate();
   return new Promise<{ origin: string; stop: () => Promise<void> }>((resolveService, rejectService) => {
     const listen = () => {

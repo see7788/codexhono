@@ -1,7 +1,8 @@
 injectWorkspacePackages: true
 
 packages:
-  - "vscode"
+  - "todoapp-vscode-plugin"
+  - "honoapp-vscode-plugin"
   - "honoapp"
   - "reactapp"
   - "preloads/*"
