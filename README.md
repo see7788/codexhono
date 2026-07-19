@@ -88,7 +88,7 @@ extends-codex/
 │       └── tpl/store.ts                  # 模板加载、保存与目标发布
 ├── preloads/
 │   └── webcodex/src/doubaoAsk.ts         # Web 预加载侧豆包提问能力
-├── vscode/                                 # 独立 VS Code 插件子项目
+├── honoapp-vscode-plugin/                  # 独立 VS Code 插件子项目
 │   ├── src/index.ts                        # 启动服务，并提供左侧原生服务状态视图
 │   ├── src/media/icon.png                   # 由 icon.ico 生成的插件图标
 │   ├── src/media/icon-activity.png          # 由同一图案生成的 Activity Bar 单色图标
@@ -117,11 +117,11 @@ pnpm install
 pnpm dev
 pnpm docs:check
 pnpm typecheck
-pnpm build:vscode
+pnpm --dir honoapp-vscode-plugin run build
 ```
 
 本仓库的 `pnpm dev` 通过 tsx watch 直接运行 `honoapp/src/index.ts`；上面的 `pnpm dlx github:see7788/extends-codex dev` 是其他项目使用已发布 CLI 的方式，两者不是同一个入口。
-`pnpm build:vscode` 编译 `vscode/src/index.ts` 为插件入口 `vscode/dist/index.js`；插件不内嵌 `honoapp`，而是在当前工作区启动 `extends-codex dev`，由 Vite 提供最新页面源码并由 Hono 提供模板接口。调试时打开 `vscode/` 文件夹并按 F5，`.vscode/launch.json` 会启动 Extension Development Host；普通新开 VS Code 窗口不会加载该本地扩展。`pnpm docs:check` 会在 package、进程/路由入口或模板源变化时要求 README 或 `docs/` 同步变化，作为语义 checklist 之外的机械门禁。
+`pnpm --dir honoapp-vscode-plugin run build` 编译 `honoapp-vscode-plugin/src/index.ts` 为插件入口 `honoapp-vscode-plugin/dist/index.js`；插件不内嵌 `honoapp`，而是在当前工作区启动 `extends-codex dev`，由 Vite 提供最新页面源码并由 Hono 提供模板接口。调试时打开 `honoapp-vscode-plugin/` 文件夹并按 F5，`.vscode/launch.json` 会启动 Extension Development Host；普通新开 VS Code 窗口不会加载该本地扩展。`pnpm docs:check` 会在 package、进程/路由入口或模板源变化时要求 README 或 `docs/` 同步变化，作为语义 checklist 之外的机械门禁。
 
 `.codex` 是运行时生成产物；PC 用户级 AGENTS、MCP、agents 与 skills 的长期定义只维护在 `honoapp/src/tpl/globalsource/source.ts` 的同一个 source 对象，项目级 `honoapp/src/tpl/source.ts` 只维护项目 AGENTS、hooks 与 skills，并直接复用全局 `nodes` 后补充自己的 hook 节点。两类 source 由同一个 `sourceSchema` 验证，并由同一个 `CodexOutput({ path, source })` 输出；用户级采用增量合并并通过 `.codex/.extends-codex-output.json` 保存所有权状态，项目级直接物化目标文件。AGENTS、skills、agents 和 config 正文不再写入 extends-codex 所有权标记，旧标记只在首次迁移时识别和移除。全局 AGENTS 承担总纲、任务分流、三个 agent 的最小兜底定义和模板改进分流，详细约束由对应 skill 维护；`worker` 负责实际处理和修改，`indexer` 负责检查实现和发现问题，`tokener` 负责运行验证和确认结果，没有真实创建子 agent 时统一记为 `worker`。
 模板只在存在多个真实消费点，或定义自身维护独立状态、生命周期、不变量时允许抽象；其他单点定义必须内联到真实消费处，移动可见性、文件或目录不视为复用。
@@ -134,7 +134,29 @@ pnpm build:vscode
 
 ---
 
-## 可审计的工作流 [?] 待确认、[ ] 待办、[~] 进行中、[x] 已完成、[!] 阻塞
+## 待补充 Codex 要求
+
+本节记录本项目磨合出的全局协作要求；`todoapp-vscode-plugin` 完成并具备工作流接口后，再统一复核、写入全局模板并物化。
+
+- 默认不新增测试性质文件，例如 `*.test.*`、`*.spec.*` 与 `__tests__/`；验证使用真实构建、真实接口、真实页面或老板明确的运行入口。
+- 类型建模优先使用单一完整领域类型，并以 TypeScript 的 `Pick`、`Omit`、泛型约束和继承/组合派生创建、更新或局部操作类型；禁止为同一字段集合手工重复声明近似类型、重复 action 或重复字段更新逻辑。
+- 参数与输入类型只在存在真实边界价值时抽象：单一调用点、同文件且没有独立业务语义的参数组合，不新建 `XxxInput`、对象包裹或 helper，优先保持直接参数；仅在跨层/跨包、多个调用者、可选字段组合或稳定请求契约时，才使用对象参数及由 `Pick`/`Omit` 派生的输入类型。
+- 工作流统一使用九种状态：待确认、待办、未派工、运行中、已反馈、已中断、已完成、阻塞、已取消。待办表示老板目标已确认但尚未拆成可执行派工；未派工表示已建立具体执行叶子但尚无真实实例；已反馈表示工作者已返回、等待 parent 吸收结果并续派或完成；已中断表示实例被打断/退出但可重派；阻塞表示外部条件或老板确认缺失；已完成与已取消是终态。工作者完成“识别/报告阻塞”时可标已反馈，parent 必须在其下新增建议或待老板确认节点；原目标保持阻塞，直到老板确认新的待办、取消或替代节点。
+- 领域数字与展示文字的映射放在对应对象的 `store.ts` 默认导出切片内：持久化数据根不存映射，`${object}Actions` 根保存其非持久化映射数据与方法；TSX 只从仓库消费映射结果，不导入独立常量或为单一路由定义专用映射组件。本轮以文字展示替代图标；后续如需颜色或图标，也只能作为同一映射的附加展示字段，不能替代可读文字。
+- Zustand 对象目录的主仓库结构固定为同名持久化数据根与同名复数 `Actions` 根：例如 `todotree` 只保存可持久化业务数据，`todotreeActions` 承担该对象的方法及不持久化运行态；不得把 action 或临时状态混入数据根，也不得拆成无对象归属的平铺 action。
+- 多工作者不构成固定流水线：边界清晰且连续的完整功能切片优先委派给一个 worker 端到端实现并验证；仅对独立 ownership 并行，indexer 只用于首次陌生范式或必要调查，tokener 只用于关键风险/阻塞，logger 只监督真实运行任务。
+- React 项目必须采用 React Router，并提供一个名为 `routers` 的路由定义文件；每个实际路由必须消费对应 TSX 页面文件，不能只在根 `App.tsx` 内堆叠页面内容而没有可观察路由入口。
+- 不得把 VS Code Timeline/Local History 当作跨路径恢复机制：既有重要源码、模板和规则文件默认禁止移动、重命名或删除；确需调整路径时，必须先取得老板明确授权，并在移动前创建可验证的 Git 检查点，记录旧路径、新路径与提交标识。禁止在未保存当前脏文件完整内容时执行 `git restore`、checkout 或整文件覆盖；恢复必须先展示可信候选版本及差异，老板确认后才能写回。
+- 中文模板、规则、Markdown 与源码必须保持严格 UTF-8：读取使用 Node `fs.readFileSync(path, "utf8")` 并做 fatal UTF-8、BOM、`U+FFFD`、哈希、行数和语义锚点检查；禁止把 PowerShell `Get-Content`、终端输出、乱码文本、截图/OCR 或未知代码页字符串接入写回链路。只允许基于可信原文件做最小 `apply_patch`；出现乱码、异常大 diff、语法连锁报错或语义锚点缺失时立即停止，先保全当前字节与恢复来源，禁止自动转码、Git 覆盖或继续试探性修改。
+- 仓库文本统一使用 UTF-8 无 BOM 与 LF；根目录必须通过 `.editorconfig`、`.gitattributes` 和 VS Code 工作区设置固定打开、保存与 Git 行尾格式，关闭自动猜测编码。每个独立可验收交付物写后验证通过必须立即创建只包含本任务 ownership 文件的 Git 提交，再开始下一项无关任务、移动文件或物化；禁止 `git add .`、`git add -A` 和夹带用户改动，提交失败时不得称为已保存或完成。
+
+- parent 只做领导工作：理解老板对话、维护任务树内容、派工、接收反馈、重排和汇报；普通文档、源码、配置、测试、构建与运行实现都必须由具体 worker 完成。
+- 默认任务树按真实依赖显示 `worker` 或 `indexer` 的实施；必要时追加 `tokener` 审查；parent 收到审查反馈后先追加反馈节点，再追加新的 worker 修复节点。树上不显示 logger。
+- logger 在后台只依据真实派工、写入、运行状态、阻塞和未完成事实监督；只能在指定位置、指定格式标记状态，发现 parent 越界或 logger 自身越权时报告并停止，不做业务、审查、派工或无事实提醒。
+- tokener 强制只读，只返回证据、根因和建议；它没有实施、建任务或派工权限。
+- `todoapp-vscode-plugin` 完成后，工作流对象接口成为 parent 与 logger 的共同约束入口：parent 通过接口派工/接收反馈，logger 通过只读监督与状态接口操作；浏览器 Zustand persist 只保存项目路径分区的 UI 状态，不取代工作流事实。
+
+## 可审计的工作流 [?] 待确认、[ ] 待办、[>] 未派工、[~] 运行中、[<] 已反馈、[|] 已中断、[x] 已完成、[!] 阻塞、[-] 已取消
 
 - [x] worker 解决：全局 skill 产物改为以 YAML frontmatter 开头；隔离生成的 8 个 skill 均通过 `quick_validate.py`，重复同步哈希一致。
 - [x] worker 解决：收敛只读任务、项目文档写入和 Git 外部写入授权边界；隔离生成的 checklist skill 已包含新规则并通过格式校验。
@@ -218,3 +240,64 @@ pnpm build:vscode
 - [x] parent（当前主 Codex / GPT-5）处理：老板确认 logger 的完成监督结论即为完成。派工规则已要求 parent 写清完成条件与验收证据；logger 确认全部满足后直接标记 `[x]`、汇报完成，parent 不重复 review，除非老板要求复核或证据冲突。已同步全局 source 与用户级 logger 定义。
 - [x] parent（当前主 Codex / GPT-5）处理：老板要求压缩 logger 定义并明确 parent 职责。全局规则现明确 parent 负责需求、任务内容、范围、完成条件、验收证据、派工、重排与处理监督报告；logger 仅监督实际工作者、按真实状态更新既有任务、完成即标记 `[x]` 并汇报。已同步全局 source 与用户级 logger 定义。
 - [x] parent（当前主 Codex / GPT-5）处理：老板确认整体线路为“老板 → parent 澄清至可派工 → logger 与具体工作者并行”。规则已明确 parent 派工后不介入执行细节、仅接收 logger 的异常或完成报告；logger 持续监督且不停止工作者，老板的新要求仍由 parent 先澄清。
+- [x] 老板提出：安全整理全局 AI 要求。`indexer global_rules_classify`（运行时模型标识未提供）已只读完成 `agentsMd` 与旧 checklist 的唯一归属分类；为避免具体工作者读取 parent 私有内容，本轮由 parent 直接将 `agentsMd` 收敛为角色/技术分流，新建仅由 parent 加载的 `parent-workflow-styleskill`，迁入需求澄清、任务记录、文档/台账同步、工作者可用性、派工、等待、打断与重排；另将模板服务独立为按需 skill，`docStyle` 只保留 README/tree 公开写作格式，logger 与具体工作者定义限制为最小任务上下文。Hono TypeScript、source schema、临时物化及两个新 skill 校验已通过；`tokener routing_privacy_review`（运行时模型标识未提供）最终确认共享 AGENTS/logger 隐私问题及 symlink/二次复检问题均已解决，仅剩极小本机竞态风险。`worker stale_generated_cleanup`（运行时模型标识未提供，exclusive ownership：`honoapp/src/tpl/output/index.ts`）已完成精确清理并通过普通旧文件、外改阻断、未知保留、二次幂等、路径穿越、junction 与并发外改场景验证；Windows 文件 symlink 因权限未实测。`logger workflow_t221`（运行时模型标识未提供）已实际创建并监督本记录。最终 Hono TypeScript、source schema、9 个生成 skill quick_validate、隐私静态断言、隔离物化、git diff/UTF-8 验证均通过。
+- [~] 老板提出：先通过正式模板服务把当前全局 source 更新并物化到用户级 `.codex`；随后重构可审计工作流为树形父子任务、收紧 logger/parent/docStyle/templateService 与具体工作者的最小读取范围。parent 负责当前顶级需求澄清与派工；待 logger 实际接管此行状态监督。验收：服务回读 source 与当前源码一致、用户级产物刷新且退役 checklist 不再存在；树形记录可按稳定节点 ID 和当前行内容定位，父子任务/并行 ownership/依赖可审计，具体工作者不加载 parent、logger、docStyle 或模板服务私有内容。阻塞事实（已解除）：parent 启动临时 `extends-codex start` 以正式接口物化时，启动前预检失败，错误为 `Global Codex file changed outside its source: C:\Users\diyya\.codex\agents\logger.toml`；当时没有服务监听、没有用户级文件被覆盖。解除条件（已满足）：parent 只读比较旧 state、当前 logger 与当前模板期望，得到老板授权的保留/迁移策略后再物化。物化成功证据：正式 PUT/POST 返回 200；用户级 AGENTS 已生成 15 行角色/技术分流，`logger-workflow` 与 `parent-workflow` skill 已存在，旧 checklist skill/state 已移除；当前 logger TOML 已含监督 parent 先建树节点的规则。整体树形台账与私有分流的源码验证尚在进行，故暂不标记完成。
+- [~] T-043 老板提出（最新设计覆盖先前“直接修改 Markdown 折叠”的方向）：凡涉及文件的工作，logger 必须监督 parent 是否先建立任务记录并真实派工；`honoapp-vscode-plugin` 扩展的既有业务功能先停用，状态栏图标点击只打开抽屉，图标以灰/彩色状态表示当前工作区 Markdown 是否启用美化。默认只读取并美化工作区根的 `AGENTS.md`，抽屉允许老板修改目标 Markdown 文件名；预览可折叠任务树，且永不改写原始文件。验收：新规则已物化；扩展仅写入 `honoapp-vscode-plugin` 子项目，状态图标和抽屉真实可见，开关状态与预览一致，默认/自定义目标均只读。
+	- [~] T-043.L logger `materialize_tree_workflow`：监督 parent 已先登记 T-043；核对本轮写入范围、真实委派和状态事实，若发现未记录实施、越界或未续排，向 parent 报告。当前事实：parent 已先登记 T-043；`T-043.W1` 已真实创建为只读 worker，旧“尚未创建”事实已被本次更新取代。
+	- [x] T-043.W1 worker `/root/vscode_tree_entry`：只读定位状态栏图标、抽屉/webview、现有业务启动开关以及 Markdown 渲染入口；exclusive ownership：`vscode` 扩展只读分析，不得改文件，输出最小停用/替换边界、状态存放位置与验证方式。事实：只读报告已交付、未改文件。
+	- [ ] T-043.W2 worker：在 `honoapp-vscode-plugin/src/index.ts` 停用既有服务启动/关闭业务，把状态栏项改为灰/彩 Markdown 美化状态并只打开抽屉；抽屉默认只读工作区根 `AGENTS.md`，允许输入工作区内相对 Markdown 名称，提供安全的折叠树预览，绝不写回 Markdown。exclusive ownership：`honoapp-vscode-plugin/src/index.ts`；验收：构建通过、工作区外路径被拒绝、服务命令不再由图标触发。
+	- [ ] T-043.W2.R1 tokener：在 W2 完成后只读 review 状态/抽屉/路径边界与 Markdown 内容转义，确认没有遗留服务启动入口或 Webview 注入风险；不修改文件。
+- [x] T-044 老板更正：新项目名称为 `todoapp-vscode-plugin`；现有 VS Code 插件项目名称为 `honoapp-vscode-plugin`。前者作为 Vite + React + Zustand 的浏览器承载入口；本轮目录/workspace 身份调整、todoapp 骨架与说明均已完成，不实现 workflow 接口、不修改 `honoapp` 业务源码。验收证据：两个新目录存在、旧目录不存在，workspace/包名/脚本/README 直接引用已同步；根 `pnpm install`、两个项目 build 和 `git diff --check` 均通过。
+	- [x] T-044.L logger：已确认 parent 在实际路径迁移前登记 T-044；W1/W2 实例创建事实已记录，W3/W4 尚未真实创建。
+	- [x] T-044.W1 worker `/root/todoapp_scaffold`：原路径骨架任务因老板改名而被 parent 中断；已产生内容由 T-044.W3 检查并迁移到 `todoapp-vscode-plugin/`，该中断已解除。
+	- [x] T-044.W2 worker `/root/todoapp_readme`：未写入且错误报告工作者定义缺失；该阻塞已由 T-044.W5 的真实 README 创建与验证解除，不将该实例误记为文档实现者。
+	- [x] T-044.W3 worker `/root/todoapp_project_rename`：两目录已精确迁移，workspace/包名/脚本/README 引用已同步；pnpm install 与两个项目 build 均 exit 0，git diff --check 通过。exclusive ownership：上述两目录、`pnpm-workspace.yaml`、相关包/README 与根 README；不得修改 `honoapp`、模板 source 或其他项目业务文件。
+	- [x] T-044.W4 worker `/root/todoapp_project_readme`：运行时认证错误 `refresh token revoked`，未提供 README 交付证据，未修改文件；该运行时故障已由 T-044.W5 重排并解除。
+	- [x] T-044.W5 indexer `/root/todoapp_readme_retry`：已创建并验证 `todoapp-vscode-plugin/README.md`；Node 严格 UTF-8、关键锚点与该文件的 `git diff --check` 通过。该文档只说明真实骨架、开发/构建入口及计划中的 workflow owner/React 消费关系，未假称接口已实现。
+- [x] T-045 老板提出：在全局 Codex 模板中收紧 parent 写入权限、让 logger 监督 parent 是否越界，并将 tokener 收紧为强制只读反馈者。验收完成：parent 写入仅限 Markdown 与全局模板唯一源；logger 无越界且仅据真实证据监督；tokener 只读反馈及反馈→worker 子节点规则已正式物化。PUT/POST、哈希回读、typecheck、sourceSchema、diff 检查均通过。
+	- [x] T-045.L logger：监督结论：parent 已先登记 T-045，实际写入仅涉及 README.md 与全局模板唯一源 `honoapp/src/tpl/global/source.ts`，无越界。正式 PUT/POST `/tpl/global/source`、`/tpl/global/materialize` 均返回 200；source SHA-256 与 GET status 的 persisted source 一致，生成的 parent/logger/tokener skill 文件均存在；Hono typecheck、sourceSchema 与 `git diff --check` 通过。tokener 强制只读、logger 无无意义提醒及反馈→worker 子节点闭环规则均已物化。
+	- [x] T-045.P1 parent：仅修改 `honoapp/src/tpl/global/source.ts` 的 parent/logger/tokener 私有规则，并完成正式全局模板接口物化、哈希回读及 schema/typecheck 验证；`git diff --check` 通过。exclusive ownership：该唯一模板源与 T-045 状态记录。
+- [~] T-046 老板提出：`todoapp-vscode-plugin` 不保留泛型 `TodoAppState.appTitle`，按既有对象目录/切片仓库风格建立真实 `src/todotree/`。验收：`todotree` 成为具体业务对象目录，拥有实际任务树节点与状态类型、同目录切片仓库；根 `src/store.ts` 只组合切片；React 入口只消费该对象，不使用假标题状态。
+	- [x] worker `/root/todotree_store`：已实现 `todoapp-vscode-plugin/src/todotree/` 与对应主仓库组合，替换泛型 App 状态；exclusive ownership：`todoapp-vscode-plugin/src/**`。`pnpm --dir todoapp-vscode-plugin run build` 与限定 src diff/UTF-8 检查通过；未改 package、README、其他项目或加入持久化/API。
+		- [x] tokener `/root/todotree_review`：只读审查完成。确认 `todotree` owner/切片根成员与主仓库边界正确，且无 `TodoAppState.appTitle` 残留；但发现 `nodesById/rootNodeIds` 仅为空类型骨架、没有创建/更新/关系维护 action，无法证明 ID、父子关系、标题与状态不变量；构建仅证明编译，不证明对象行为。
+			- [x] parent：接收审查反馈并完成重排：在 `todotree` owner 内补最小 action，原子维护节点 key/ID、根/父子关系与状态，并要求针对性行为验证；不把空态计数当成真实任务树交付。
+				- [x] worker `/root/todotree_actions`：已仅修改 `todoapp-vscode-plugin/src/todotree/store.ts`、`src/App.tsx` 与同目录 `store.test.ts`，实现并消费最小真实任务树 action；`pnpm exec tsx src/todotree/store.test.ts` 与 build 通过，覆盖 key/ID 一致、根/子关系、标题/状态更新、重复 ID 与缺失父节点拒绝。
+					- [!] tokener `/root/todotree_actions_review`：老板新增“禁止测试性质文件”要求后被 parent 中断；不得基于 `store.test.ts` 继续复审。解除条件：先删除测试文件并改用真实构建/页面或接口验证。
+						- [x] parent：接收老板纠正：`store.test.ts` 对老板无用，不保留任何测试性质文件；已安排 worker 删除，并改由真实构建和后续实际页面/接口行为验证。
+							- [x] worker `/root/todotree_test_remove`：仅删除 `todoapp-vscode-plugin/src/todotree/store.test.ts`；确认无残留入口或引用。exclusive ownership：该文件。验收：文件不存在，`pnpm --dir todoapp-vscode-plugin run build` 通过。
+	- [~] parent：接收老板类型纠正：任务节点状态必须覆盖待确认、待办、进行中、已完成、阻塞；节点必须有实际 `workerName` 字段，不能只有标题和两态 status。
+		- [!] worker `/root/todotree_status_worker`：未修改文件即中止；其将用户级 `*.toml` 误按不存在的 `*.md` 路径检查，错误报告三个必需定义缺失。解除条件：已由 parent 核实 `C:\Users\diyya\.codex\agents\{worker,indexer,tokener}.toml` 均存在，重新委派。
+			- [!] worker `/root/todotree_status_retry`：老板纠正数据结构为纯扁平关系后被 parent 中断，未改文件。旧实现同时维护 `parentId`、`childIds` 与 `rootNodeIds`，存在双写和一致性风险。解除条件：仅保留 `nodesById` 与节点 `parentId`，根节点和子节点均按 `parentId` 查询推导。
+				- [!] worker `/root/todotree_flat_worker`：任务实例在返回结果前消失；目标文件中已出现纯扁平实现、完整状态和 `workerName` 改动，但缺少该实例的构建证据，不能标记完成。解除条件：由独立 worker 只读核验构建和限定 diff，再由 tokener 只读审查。
+					- [!] worker：只读核验已被老板的数值枚举纠正取代；现有字符串 `status`、`workerName` 不能作为验收目标。解除条件：先完成数值领域字段改造。
+	- [~] parent：接收老板数据表达纠正：节点的状态和工作者均保存明确数字，不保存展示文本；展示标题、标签与图标在 React 映射。暂定稳定编码为 `status`：`1 | 2 | 3 | 4 | 5`（待确认、待办、进行中、已完成、阻塞），`worker`：`1 | 2 | 3 | 4`（parent、worker、indexer、tokener）；logger 不进入业务节点。
+		- [x] parent：已澄清老板意图：数字联合类型的成员数量由完整业务状态决定，不限制为四值；`status` 保留五种状态并编码为 `1 | 2 | 3 | 4 | 5`，`agent` 保持四种角色编码 `1 | 2 | 3 | 4`。
+			- [!] worker `/root/todotree_numeric_rework`：老板指出当前工作区已有 `extends-zustand`，禁止继续手写通用仓库/action 轮子后被 parent 中断；不得基于自实现的泛型字段更新或切片样板继续验收。解除条件：先由 indexer 只读确认 `extends-zustand` 的真实公开 API 和适配边界。
+				- [x] indexer `/root/extends_zustand_api_indexer`：只读调查完成。真实既有消费证明可复用 `extends-zustand/immerStateCreator` 切片工厂与 `extends-zustand/cwdPersist`；没有主仓库创建器或通用字段 action 的公开证据。`todoapp-vscode-plugin` 尚未声明 `extends-zustand: workspace:*`。同级真实包位于 `../extends-zustand`，不在本次允许只读范围内，因此未臆测根导出。未改文件、未创建测试或物化。
+					- [x] parent：接收调查反馈并重排：复用已证实的 `immerStateCreator`，不臆测不存在的通用 action；保留任务树的 ID、扁平关系和数值编码等领域逻辑。下一 worker 只改 package、主仓库和 todotree 切片，不改页面。
+		- [x] worker `/root/todotree_extends_zustand_worker`：worker 子工作已完成；仅修改 `todoapp-vscode-plugin/package.json`、`src/store.ts`、`src/todotree/store.ts`，以 `workspace:*` 声明并从 `extends-zustand/immerStateCreator` 复用切片工厂，保留纯扁平 `nodesById + id_parent` 及数值 `status`/`agent` 领域语义。真实 install 成功且依赖解析到 `extends-zustand link:../../extends-zustand`；集成 build 因 `App.tsx` 仍消费旧字段失败，App 不在该 worker ownership，故本叶节点阻塞，T-046 顶层不标完成。
+			- [!] parent：老板纠正既定仓库结构：`todotree` 只能存储持久化数据，`todotreeActions` 才提供方法与不持久化数据；当前实现把 action 混入 `todotree`，因此取消原定 tokener 审查，先按现有范式重排。
+				- [x] indexer `/root/zustand_object_root_indexer`：只读调查完成。现有范式均为 `{ object, objectActions }`，且持久化过滤严格排除顶层 `*Actions`；因此采用复数 `todotreeActions`，不能使用单数。`todotree` 最小持久化形状为 `{ nodesById }`；ID/父关系/数字字段是数据，方法/闭包/临时变量不得进入数据根。未改文件、未创建测试或物化。
+					- [x] parent：接收调查反馈并重排：`src/store.ts` 只组合切片无需改动；下一 worker 仅重构 todotree 数据/Actions 分层并迁移 App 消费。数字到文字的映射放 todotree 数据定义，App 只显示文字；`nodeFieldSet` 有三处实际复用，不因“无意义 helper”规则删除。
+						- [|] worker `/root/todotree_data_actions_worker`：老板将状态模型由五态纠正为九态后被 parent 中断；没有完成或构建证据，当前叶子不能验收。
+							- [<] parent：接收老板的统一九态模型；节点 `status` 依次编码为待确认、待办、未派工、运行中、已反馈、已中断、已完成、阻塞、已取消。`agent`、实例名、模型和时间戳保留为节点元数据，不再另设 runtime 状态枚举。
+					- [x] worker `/root/todotree_nine_status_worker`：仅修改 `todoapp-vscode-plugin/src/todotree/store.ts` 与 `src/App.tsx`，将切片收敛为 `{ todotree: { nodesById }, todotreeActions: { 数字到文字映射、nodeAdd、nodeTitleSet、nodeStatusSet、nodeAgentSet 及不持久化运行实现 } }`；保留纯扁平 `id_parent` 和数字九态 `status`/四角色 `agent`。映射定义在同一个 `store.ts` 默认导出切片中，App 仅从仓库消费文字，未改 root store、package、README、其他项目或创建测试。`pnpm --dir todoapp-vscode-plugin run build`、目标文件 UTF-8 完整性检查与 `git diff --check` 均通过；未使用 `parentId`、`childIds`、`rootNodeIds`，无阻塞。
+					- [x] parent：老板取消路由 TSX 顶部 `Runtime`/`Agent`/`Status` 特例；改为将数字到文字的映射归入 todotree 数据定义，TSX 只消费映射结果；本轮只显示文字、不使用图标，颜色/图标如后续加入也只能是同一映射的附加展示字段。
+						- [<] parent：老板发现当前没有可观察路由与对应 TSX 文件；T-046 暂不收尾。已补充 React Router/`routers` 规范，并重排为一个完整路由切片。
+							- [>] worker：仅修改根 `package.json`、`todoapp-vscode-plugin/package.json`、`todoapp-vscode-plugin/src/App.tsx`、`todoapp-vscode-plugin/src/routers.tsx`，以及安装不可避免且基线安全时的 `pnpm-lock.yaml`。引入 React Router，定义 `routers`，为 todotree 提供实际 TSX 路由页面；根 `pnpm dev` 必须启动 todoapp 开发入口。不得修改 store、README、其他项目或创建测试。验收：根 `pnpm dev` 可启动，todoapp build 通过，路由页面可观察。
+								- [<] parent：老板补充初始任务树根定义：前端按工作区盘符绝对路径隔离，Hash 路由通过 query 接收路径；任务树根标识就是该路径，顶级任务以它作为 `id_parent`，不再产生空根/随机根。
+									- [>] worker：待路由依赖可解析后，修改 todotree store、根 store 与实际路由页面，使 `#/todotree?path=<编码后的盘符绝对路径>` 初始化/选择对应路径根；路径是浏览器 persist 与 UI 隔离键，顶级任务 `id_parent` 等于路径根。persist 只能保存该路径的任务树数据，必须排除 `todotreeActions`、文字映射和运行态。具体 ownership 在前一轮路由 build 阻塞解除后与其合并，避免重复派工。
+- [~] T-048 老板提出：在 `todoapp-vscode-plugin` 完成前，建立供 React、parent 与 logger 共同操作的 Vite 本机工作流接口；浏览器 Zustand 主仓库按项目路径持久化 UI 状态；随后由 `honoapp-vscode-plugin` 作为 VS Code 安装入口启动/打开实际使用页面。验收：不引入 Hono；工作流事实与浏览器 UI persist 职责分离；接口与插件交接使用有类型显式输入，不依赖进程隐式参数。
+	- [ ] indexer：只读定位 `todoapp-vscode-plugin` 的 Vite 开发入口、现有主/切片仓库及 `honoapp-vscode-plugin` 的启动/浏览器入口；输出最小接口、项目路径传递、持久化 key 与分阶段 ownership，禁止改文件。
+	- [ ] worker：等待 indexer 结论和 T-046 复审通过后，实现 Vite 本机接口与工作流事实 owner；具体文件 ownership 由 parent 在派工时写入。
+	- [ ] worker：等待接口稳定后，在主仓库加入以项目路径隔离的浏览器 UI persist；不得将工作流事实只存浏览器。
+	- [ ] worker：等待页面接口可用后，将 `honoapp-vscode-plugin` 接成 VS Code 安装/启动入口并进行真实使用验证。
+- [x] T-047 老板提出：进一步明确 parent 只能承担领导职责。验收：parent 的亲自操作被精确限制为对话理解、任务树内容/派工/重排、接收反馈及老板明确授权的全局模板规则维护；普通文档、源码、配置、测试、构建和运行实现一律建立子节点并委派具体工作者，不能以“小改动”为由代做。parent 写入仅涉及 README 任务树与 `honoapp/src/tpl/global/source.ts`；Hono typecheck、source schema 与 diff 检查通过；正式 PUT/POST materialize 均返回 200，source hash 与 GET persisted source hash 一致。
+	- [x] parent：仅修改全局模板唯一源中的 parent 工作流规则并正式物化验证；exclusive ownership：`honoapp/src/tpl/global/source.ts` 与 T-047 任务树内容。证据：Hono typecheck/source schema/diff 通过；正式 PUT/POST materialize 200；source hash equals GET persisted source hash。
+- [ ] T-049 老板提出：全局默认禁止新增测试性质文件，例如 `*.test.*`、`*.spec.*` 与 `__tests__/`；验证应使用真实构建、真实接口、真实页面或老板明确要求的验证入口。验收：待 `todoapp-vscode-plugin` 完成后，与“待补充 Codex 要求”中的其他规则统一复核、写入全局模板并物化；当前 `store.test.ts` 已由 T-046 的 worker 删除。
+	- [x] parent：已撤回尚未物化的全局模板源改动，并整理到 README 的“待补充 Codex 要求”；本轮不修改全局模板、不调用物化。
+	- [x] parent：老板补充“避免没有存在意义的单点调用参数”；已整理为参数/输入类型抽象门槛并写入“待补充 Codex 要求”，等待 `todoapp-vscode-plugin` 完成后统一复核、写入模板和物化。
+	- [x] parent：老板补充阻塞闭环规则；已整理为“工作者阻塞报告完成、原目标保持阻塞、parent 新增待确认建议节点”的状态语义并写入“待补充 Codex 要求”，等待 `todoapp-vscode-plugin` 完成后统一复核、写入模板和物化。
+	- [x] parent：补齐老板确认的第六个终态“已取消”，以及完整功能切片优先一个 worker、非固定多角色流水线的协作效率规则；已写入“待补充 Codex 要求”，等待全部待办完成后统一复核、写入模板和物化。
+	- [x] parent：老板取消具体路由 TSX 的 `Runtime`、`Agent`、`Status` 固定顶部组件；已改为“数字到文字映射归数据定义、TSX 只消费”，本轮不使用图标，并写入“待补充 Codex 要求”，待全部待办完成后统一写入模板和物化。
+	- [x] parent：老板补充 Zustand 对象目录的“同名持久化数据根 + 同名复数 Actions 根”结构；已写入“待补充 Codex 要求”，待全部待办完成后统一写入模板和物化。
