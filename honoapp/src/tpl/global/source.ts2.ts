@@ -732,6 +732,15 @@ const source: GlobalSource = {
           ],
         },
         {
+          title: "Git 检查点与恢复授权",
+          items: [
+            "具体工作者完成写入和验证后只返回真实文件列表、diff 与验收证据，不自行提交 Git，除非任务信封明确授权。parent 接受独立交付物后必须立即按该 ownership 创建限定范围的 Git 提交，再开始下一项无关任务、移动文件、合并并行结果或执行物化。",
+            "parent 暂存时只使用任务明确列出的文件，提交前核对 staged 文件、diff、编码与验证证据；禁止 `git add .`、`git add -A` 或夹带老板和其他任务改动。并行结果由 parent 串行验收和提交，每个提交记录到对应任务节点。",
+            "恢复、回滚、checkout、restore、整文件覆盖、文件移动或重命名会改变内容或历史可达性时，parent 必须先保全当前哈希、脏 diff、Timeline/Git 候选与恢复路径，向老板展示候选时间戳和预计差异；没有老板确认不得执行。",
+            "提交或 push 失败时任务保持未完成，记录失败原因与本地提交标识；只有老板明确要求推送或项目已授权当前分支自动推送时，parent 才把检查点推送到远端。",
+          ],
+        },
+        {
           title: "失败刹车",
           items: [
             "同一真实调用路径连续两次失败，或第二次仍不能明确失败边界时，必须停止重试和试探性 patch；列出每一层已证实与未证实事实，只允许在最早未证实边界增加最小诊断，禁止继续重复调用外部服务或修改下游实现。",
@@ -829,6 +838,15 @@ const source: GlobalSource = {
             "老板指出模板或规则不符合习惯时，普通项目通过模板接口读取、更新、物化并验证，说明对应接口、skill 名、section 标题和具体规则；不得转而修改模板服务源码或生成产物。",
           ],
         },
+        {
+          title: "预览、恢复与发布",
+          items: [
+            "模板源修改后先生成独立预览并逐对象渲染，与当前已物化 AGENTS、agents、skills 和 config 比较；物化产物比源码更新时，先把产物作为恢复证据重建预览源，禁止用较旧源码覆盖较新产物。",
+            "恢复候选必须放在与正式源并列的独立预览文件中，逐项列出可信快照主体、较新物化差异、尚未物化增量和明确排除的项目专属内容；老板确认预览前不得合入正式源。",
+            "正式源合入后必须先通过严格 UTF-8、语义锚点、schema、类型检查和限定 diff，再由 parent 创建 Git 检查点；只有老板确认且检查点成功后才调用全局物化接口。",
+            "物化后逐字比较实际产物与预期渲染，确认旧 agent/skill 已按源定义处理且用户自有 config 合并项未丢失；验证失败时停止发布并使用物化前 Git 检查点恢复。",
+          ],
+        },
       ],
     },
     [nodes.docStyle]: {
@@ -898,6 +916,7 @@ const source: GlobalSource = {
             "最高风险链路是错误解码后整文件回写，例如 `Get-Content` 读取中文后交给 `Set-Content`；写入编码显式也无法修复读取阶段已经发生的损坏。",
             "终端字体、代码页和输出截断会制造假乱码或隐藏真实乱码；终端显示只能用于定位，不能作为内容真实性证据。",
             "模板、规则和长文件一旦整文件覆盖，语法检查可能仍通过但大量语义已经丢失；必须同时保护结构、锚点、规模和可信来源。",
+            "VS Code Timeline 是统一视图：Git History 显示提交谱系，Local History 显示编辑器保存快照。Git 对新复制或重命名文件使用 follow/相似度追踪时会显示文件创建前的提交，这不是 Local History 损坏；先在 Timeline 过滤器中确认 provider，查看保存历史时关闭 Git History、保留 Local History。不得因为 Git 提交日期较旧而迁移或改写 Local History 内部索引。",
           ],
         },
         {
@@ -910,8 +929,8 @@ const source: GlobalSource = {
             "用户必须在 AI 修改期间停止编辑同一目标文件；若文件哈希、mtime 或 Git 状态在基线后变化，AI 必须停止并告知基线失效，不能自动合并或覆盖。",
             "用户若要求跳过基线、猜编码、批量转码、从截图/终端乱码恢复、无可信来源整文件重写，AI 必须拒绝并要求提供 Git、编辑器历史或确认无误的原文。",
             "整文件重写只允许生成器输出或用户明确要求且存在完整权威源；写入前必须证明源内容未截断，并能在写后逐字或结构化对比。",
-            "VS Code Timeline/Local History 按文件 URI 保存，不能跨路径保证恢复；既有重要源码、模板和规则文件默认禁止移动、重命名或删除。确需调整路径时必须先取得老板明确授权，并在移动前创建可验证的 Git 检查点，记录旧路径、新路径、提交标识和当前脏状态。",
-            "禁止在未保存当前脏文件的完整可信内容、哈希和差异时执行 `git restore`、checkout、整文件复制或覆盖；语法错误只证明当前解析失败，不证明整份内容可以丢弃。任何恢复命令执行前必须先展示候选来源、时间戳和预计丢失范围，由老板确认恢复主体。",
+            "VS Code Timeline/Local History 按文件 URI 保存，不能跨路径保证恢复；既有重要源码、模板和规则文件没有任务信封明确授权时禁止移动、重命名或删除。已授权移动前必须确认存在可验证的 Git 检查点，并记录旧路径、新路径、提交标识和当前脏状态。",
+            "禁止在未保存当前脏文件的完整可信内容、哈希和差异时执行 `git restore`、checkout、整文件复制或覆盖；语法错误只证明当前解析失败，不证明整份内容可以丢弃。需要恢复时只收集候选来源、时间戳和预计差异，返回 `Recovery Approval Required` 交由 parent 取得授权，不得自行选择恢复主体。",
           ],
           code: {
             language: "powershell",
@@ -931,6 +950,21 @@ const source: GlobalSource = {
             "读取结果与 Git、编辑器或用户确认的语义锚点不一致时，按损坏处理，不尝试猜测哪一种编码能变回原文。",
             "终端显示乱码但严格 UTF-8 解码、Unicode 码位和语义锚点正常时，只能判定为显示链路异常，不得转码或恢复文件；终端显示正常也不能替代字节检查。",
           ],
+          code: {
+            language: "ts",
+            content: [
+              'import { createHash } from "node:crypto";',
+              'import { readFileSync } from "node:fs";',
+              'import { TextDecoder } from "node:util";',
+              "",
+              "const bytes = readFileSync(path);",
+              'const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);',
+              'if (bytes.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf]))) throw new Error("Text Integrity Check Failed: UTF-8 BOM");',
+              'if (content.includes("\\uFFFD")) throw new Error("Text Integrity Check Failed: replacement character");',
+              'if (content.includes("\\r\\n")) throw new Error("Text Integrity Check Failed: expected LF");',
+              'const baseline = { path, content, bytes: bytes.length, lines: content.split("\\n").length, sha256: createHash("sha256").update(bytes).digest("hex") };',
+            ].join("\n"),
+          },
         },
         {
           title: "安全写入",
@@ -940,12 +974,20 @@ const source: GlobalSource = {
             "禁止使用 `Set-Content`、`Out-File`、重定向、管道、字符串拼接脚本或跨 shell 转发来改写仓库文本；格式化器和受控生成器除外，但必须有真实入口和验证。",
             "禁止任何读取命令的输出直接进入写入命令；读取、判断、修改必须是三个可审计步骤。",
             "禁止为了修乱码执行自动转码、重复编码/解码试验或批量替换常见乱码字符；没有权威原文时保持阻塞。",
-            "模板只改唯一源文件，生成产物通过真实生成器刷新；不得直接修补生成产物后反向覆盖源文件。",
-            "模板源修改后先生成独立预览或渲染结果，与当前已物化产物逐对象比较；只有老板确认预览、schema 与类型检查通过且差异规模符合预期时才允许物化。物化产物比源码更新时，先把产物作为恢复证据重建源码，禁止直接用较旧源码覆盖较新产物。",
-            "每个独立可验收交付物在写后验证通过后必须立即创建限定范围的 Git 提交作为恢复检查点，再开始下一项无关任务、移动文件或执行物化；只暂存本任务 ownership 内的明确文件，禁止使用 `git add .`、`git add -A` 或夹带用户与其他任务改动。提交失败时保持任务未完成并报告原因，不得把未提交工作称为已保存。",
-            "提交前再次核对 staged diff、文件列表、UTF-8 无 BOM、LF、语义锚点和真实验证结果；提交信息说明独立交付物。若老板明确要求暂不提交或仓库禁止提交，记录例外与恢复位置，否则 Git 检查点是强制收尾条件。",
+            "具体工作者写入后必须完成任务信封要求的验证，并向 parent 返回真实文件列表、diff、UTF-8/行尾检查、语义锚点和验收证据；没有任务信封明确授权时不得自行执行 Git commit、push 或其他外部发布。",
             "没有放权时只能修改用户指定范围；删除非本轮创建的文件仍需确认。截图和调试日志只写根目录 `.log/`。",
           ],
+          code: {
+            language: "diff",
+            content: [
+              "*** Begin Patch",
+              "*** Update File: <absolute-target-path>",
+              "@@",
+              "-<exact-old-lines-from-validated-baseline>",
+              "+<minimal-new-lines>",
+              "*** End Patch",
+            ].join("\n"),
+          },
         },
         {
           title: "写后验证（兜底）",
@@ -960,9 +1002,9 @@ const source: GlobalSource = {
           title: "事故恢复（最后手段）",
           items: [
             "一旦怀疑乱码或异常删减，立刻停止所有写入和转码，返回 `Text Integrity Check Failed`；先记录当前哈希、大小、行数、Git diff 和时间戳。",
-            "按 Git 提交/对象、VS Code Timeline/Local History 的实际快照文件、已物化产物、会话日志、用户确认原文的顺序寻找最后可信版本；时间线 UI 因旧路径不存在而打不开时，读取其 `entries.json` 定位真实快照文件。终端乱码输出不是可信版本。",
+            "按 Git 提交/对象、VS Code Timeline/Local History 的实际快照文件、任务生成器留下的可信产物、会话日志、用户确认原文的顺序寻找最后可信版本；时间线 UI 因旧路径不存在而打不开时，读取其 `entries.json` 定位真实快照文件。终端乱码输出不是可信版本。",
             "恢复时以完整可信版本为主体，只重放经过确认的最小 patch；禁止从 AI 记忆写一个更短的“干净版本”替换原文件。",
-            "恢复候选必须写入独立预览文件供老板审阅，正式源保持不动；逐项列出候选主体、较新物化差异、尚未物化增量和明确排除的项目专属内容，老板确认后才合入正式源。",
+            "恢复候选必须写入独立预览文件，正式目标保持不动；逐项列出可信主体、其他候选差异和明确排除内容并返回 parent，不得由具体工作者自行合入正式目标。",
             "恢复后必须证明主体与可信版本逐字一致或只有预期 diff，再运行编码、锚点、schema 和生成验证；无法证明时保持阻塞并请求用户决定。",
           ],
         },

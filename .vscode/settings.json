@@ -1,5 +1,9 @@
 {
   "files.encoding": "utf8",
   "files.autoGuessEncoding": false,
-  "files.eol": "\n"
+  "files.eol": "\n",
+  "workbench.localHistory.enabled": true,
+  "workbench.localHistory.maxFileSize": 2048,
+  "workbench.localHistory.maxFileEntries": 200,
+  "workbench.localHistory.mergeWindow": 1
 }
